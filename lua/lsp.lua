@@ -44,7 +44,7 @@ end, { silent = true, desc = "Go to definition" })
 -- keys.setup() could have watched for them, and K is attached per buffer when a
 -- server that answers hover connects.
 require("keys").declare({
-	{ lhs = "K", desc = "Documentation for the symbol under the cursor (Neovim default)" },
+	{ lhs = "K", desc = "Documentation for the symbol under the cursor; K again to scroll it, q closes" },
 	{ lhs = "grn", desc = "Rename the symbol under the cursor (Neovim default)" },
 	{ lhs = "gra", mode = { "n", "x" }, desc = "Code actions (Neovim default)" },
 	{ lhs = "grr", desc = "References, in the quickfix list (Neovim default)" },

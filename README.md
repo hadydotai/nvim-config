@@ -70,7 +70,7 @@ alone. The full set is in `<leader>h`; the ones worth knowing up front:
 | key         | what it does                                              |
 | ----------- | --------------------------------------------------------- |
 | `gd`        | go to definition (the only one added here)                |
-| `K`         | documentation for the symbol under the cursor             |
+| `K`         | documentation for the symbol under the cursor; `K` again focuses the float so you can scroll it, `q` closes |
 | `grr`       | references, in the quickfix list                          |
 | `grn`       | rename                                                    |
 | `gra`       | code actions                                              |
