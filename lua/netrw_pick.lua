@@ -64,13 +64,46 @@ end
 
 local targets = win_pick.targets
 
+-- Open the file under the cursor into a freshly made editing split, leaving
+-- netrw itself where it is. new_editing_split re-pins the sidebar afterwards,
+-- which is the whole reason to make the window ourselves rather than let netrw
+-- do it.
+local function browse_in_new_split(islocal, word, cmd)
+	local netrw_win = vim.api.nvim_get_current_win()
+	local created = require("netrw_sidebar").new_editing_split(cmd)
+	if not (created and vim.api.nvim_win_is_valid(created)) then
+		return
+	end
+
+	vim.api.nvim_set_current_win(netrw_win)
+	local keep_split, keep_chgwin = vim.g.netrw_browse_split, vim.g.netrw_chgwin
+	vim.g.netrw_browse_split = 0
+	-- window numbers can shift when the sidebar is re-pinned, so resolve this
+	-- after the split has settled
+	vim.g.netrw_chgwin = vim.api.nvim_win_get_number(created)
+	local ok, err = pcall(browse, islocal, word)
+	vim.g.netrw_browse_split = keep_split
+	vim.g.netrw_chgwin = keep_chgwin or -1
+	if not ok then
+		error(err)
+	end
+end
+
 -- netrw's own behaviour for the current window layout
 local function open_default(islocal, word)
 	local win = vim.api.nvim_get_current_win()
-	if #targets(win) == 0 and not is_sidebar(win) then
-		return browse_here(islocal, word)
+	if #targets(win) > 0 then
+		return browse(islocal, word)
 	end
-	return browse(islocal, word)
+
+	-- Nothing to open into. netrw must not be left to sort this out itself:
+	-- browse_split=4 means "the previous window", and with none to be had netrw
+	-- invents one by splitting horizontally, which drops the file in a pane
+	-- above and leaves the sidebar stretched along the full width underneath.
+	if not is_sidebar(win) then
+		return browse_here(islocal, word) -- a plain netrw window takes the file
+	end
+	return browse_in_new_split(islocal, word, "vsplit")
 end
 
 function M.default(islocal)
@@ -91,25 +124,7 @@ function M.split_open(islocal, cmd)
 	if word:sub(-1) == "/" then
 		return browse(islocal, word) -- directories keep expanding as usual
 	end
-
-	local netrw_win = vim.api.nvim_get_current_win()
-	local created = require("netrw_sidebar").new_editing_split(cmd)
-	if not (created and vim.api.nvim_win_is_valid(created)) then
-		return
-	end
-
-	vim.api.nvim_set_current_win(netrw_win)
-	local keep_split, keep_chgwin = vim.g.netrw_browse_split, vim.g.netrw_chgwin
-	vim.g.netrw_browse_split = 0
-	-- window numbers can shift when the sidebar is re-pinned, so resolve this
-	-- after the split has settled
-	vim.g.netrw_chgwin = vim.api.nvim_win_get_number(created)
-	local ok, err = pcall(browse, islocal, word)
-	vim.g.netrw_browse_split = keep_split
-	vim.g.netrw_chgwin = keep_chgwin or -1
-	if not ok then
-		error(err)
-	end
+	browse_in_new_split(islocal, word, cmd)
 end
 
 -- The directory a new file should land in. In tree view NetrwTreeDir tracks the
