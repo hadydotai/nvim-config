@@ -157,6 +157,53 @@ local DEPS = {
 
 --- Every dependency with an `ok` flag and the command that would provide it.
 --- The command is nil when we have no recipe for this platform.
+-- bin -> can it actually run, filled in by M.check() and kept for the session
+local probed = nil
+
+local function present(bin)
+	if probed then
+		return probed[bin] == true
+	end
+	return vim.fn.executable(bin) == 1
+end
+
+--- Work out what actually runs, as opposed to what merely resolves on $PATH.
+--- The difference is the whole point: a pyenv or asdf shim is executable and
+--- exepath() finds it, but running it prints "command not found" and exits 127
+--- unless the active version happens to have the tool installed. From the
+--- outside that is indistinguishable from a language server dying for no
+--- reason, which is exactly the thing this file exists to prevent.
+---
+--- Asynchronous, because it spawns every dependency once, and cached.
+function M.check(done)
+	if probed then
+		return done(probed)
+	end
+	local results, left = {}, #DEPS
+	local function finish()
+		left = left - 1
+		if left == 0 then
+			probed = results
+			-- vim.system calls back from libuv, where most of the API is off
+			-- limits, so hand the result to the caller on the main loop
+			vim.schedule(function()
+				done(results)
+			end)
+		end
+	end
+	for _, dep in ipairs(DEPS) do
+		if vim.fn.executable(dep.bin) == 0 then
+			results[dep.bin] = false
+			finish()
+		else
+			vim.system({ dep.bin, "--version" }, { text = true, timeout = 10000 }, function(out)
+				results[dep.bin] = out.code == 0
+				finish()
+			end)
+		end
+	end
+end
+
 function M.status()
 	local platform = M.platform()
 	local out = {}
@@ -170,7 +217,7 @@ function M.status()
 		out[#out + 1] = {
 			bin = dep.bin,
 			why = dep.why,
-			ok = vim.fn.executable(dep.bin) == 1,
+			ok = present(dep.bin),
 			kind = dep.system and "system" or "local",
 			after = dep.after,
 			command = command,
@@ -315,11 +362,14 @@ function M.setup()
 	})
 
 	vim.api.nvim_create_user_command("Deps", function(opts)
-		if opts.args == "install" then
-			install()
-		else
-			show()
-		end
+		-- through check() so both views report what runs, not what resolves
+		M.check(function()
+			if opts.args == "install" then
+				install()
+			else
+				show()
+			end
+		end)
 	end, {
 		nargs = "?",
 		complete = function()
@@ -335,8 +385,11 @@ function M.setup()
 		once = true,
 		callback = function()
 			vim.defer_fn(function()
-				local gone = M.missing()
-				if #gone > 0 then
+				M.check(function()
+					local gone = M.missing()
+					if #gone == 0 then
+						return
+					end
 					local names = vim.tbl_map(function(dep)
 						return dep.bin
 					end, gone)
@@ -344,7 +397,7 @@ function M.setup()
 						("deps: missing %s -- run :Deps"):format(table.concat(names, ", ")),
 						vim.log.levels.WARN
 					)
-				end
+				end)
 			end, 200)
 		end,
 	})
