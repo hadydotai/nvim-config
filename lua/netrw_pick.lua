@@ -392,6 +392,15 @@ function M.setup()
 		{ "<c-w>v", "NetrwPickVsplit" },
 		{ "%", "NetrwPickNew" },
 	}
+
+	-- netrw installs the maps above itself, so keys.lua never sees them go by
+	require("keys").declare({
+		{ lhs = "<cr>", where = "netrw", desc = "Outline a target window, hjkl to move, <CR> to open there" },
+		{ lhs = "<s-cr>", where = "netrw", desc = "Open the file in the previous window (netrw's default)" },
+		{ lhs = "<c-w>s", where = "netrw", desc = "Open the file under the cursor in a new horizontal split" },
+		{ lhs = "<c-w>v", where = "netrw", desc = "Open the file under the cursor in a new vertical split" },
+		{ lhs = "%", where = "netrw", desc = "Create a file on disk, then choose where to open it" },
+	})
 end
 
 return M

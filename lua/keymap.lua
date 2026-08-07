@@ -20,6 +20,17 @@ vim.keymap.set(
 	}
 )
 
+vim.keymap.set(
+	"n", "<leader>h",
+	function()
+		require("keys").show()
+	end,
+	{
+		silent = true,
+		desc = "List the mappings this configuration sets",
+	}
+)
+
 vim.keymap.set("n", "<C-b>", "<C-^>", { silent = true, desc = "Alternate buffer" })
 
 vim.keymap.set(

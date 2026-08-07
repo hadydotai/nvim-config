@@ -1,3 +1,4 @@
+require("keys").setup() -- first: it records the mappings everything below sets
 require("options")
 require("lsp")
 require("colorscheme")
