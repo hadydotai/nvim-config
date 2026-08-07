@@ -7,13 +7,15 @@
 --            OS package manager and generally want sudo, so the command differs
 --            per platform and we cannot keep them inside the config directory.
 --
---   local    tree-sitter, lua-language-server, pylsp, tsgo. These are ours, not
---            the system's, so they are fetched straight from upstream into the
---            config directory (see paths.lua) with no sudo and no package
---            manager. That means one recipe for every platform instead of
---            three, and it sidesteps distributions shipping a tree-sitter CLI
---            far older than nvim-treesitter needs: Ubuntu 24.04 still has
---            0.20.7 against a floor of 0.26.1.
+--   local    tree-sitter, lua-language-server, pylsp, tsgo, rust-analyzer.
+--            These are ours, not the system's, so they are fetched straight
+--            from upstream into the config directory (see paths.lua) with no
+--            sudo and no package manager. That means one recipe for every
+--            platform instead of three, and it sidesteps distributions
+--            shipping a tree-sitter CLI far older than nvim-treesitter needs:
+--            Ubuntu 24.04 still has 0.20.7 against a floor of 0.26.1.
+--            rust-analyzer is the one exception to the "into this directory"
+--            half of that; the comment above its recipe says why.
 --
 -- :Deps          show what is present and what is missing
 -- :Deps install  install everything missing, in a terminal so sudo can prompt
@@ -139,6 +141,23 @@ local function tsgo_cmd()
 	return ("mkdir -p %s/node && npm install --silent --prefix %s/node @typescript/native-preview"):format(DATA, DATA)
 end
 
+--- The one local dependency that does not land in .data/, because rust-analyzer
+--- on its own is not much use: it needs cargo to read the project and the
+--- rust-src component to say anything at all about the standard library, and
+--- what keeps those three at one version, including the version a project pins
+--- in rust-toolchain.toml, is rustup. So rustup gets installed if it is
+--- missing, which is still one command on every platform and still no sudo, and
+--- the analyzer comes from there rather than from a release tarball that would
+--- drift away from the toolchain underneath it.
+local function rust_analyzer_cmd()
+	return table.concat({
+		"command -v rustup >/dev/null 2>&1 ||"
+			.. " { curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
+			.. ' && . "$HOME/.cargo/env"; }',
+		"rustup component add rust-analyzer rust-src",
+	}, " && ")
+end
+
 --------------------------------------------------------------------------- --
 -- the list
 --------------------------------------------------------------------------- --
@@ -153,6 +172,7 @@ local DEPS = {
 	{ bin = "lua-language-server", why = "lua language server", get = lua_ls_cmd },
 	{ bin = "pylsp", why = "python language server", get = pylsp_cmd, after = "python3" },
 	{ bin = "tsgo", why = "typescript language server", get = tsgo_cmd, after = "npm" },
+	{ bin = "rust-analyzer", why = "rust language server", get = rust_analyzer_cmd },
 }
 
 --- Every dependency with an `ok` flag and the command that would provide it.

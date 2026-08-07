@@ -34,6 +34,12 @@ packages (compiler, git, curl, node, python) come from the OS package manager
 and differ per platform; the language servers and the tree-sitter CLI are
 fetched straight from upstream into `.data/` with no sudo.
 
+rust-analyzer is the one that does not land in `.data/`. It is no use without
+cargo to read the project and the `rust-src` component to know the standard
+library, and rustup is what holds those at one version, including whatever
+version a `rust-toolchain.toml` pins. So it comes from rustup, which the recipe
+installs first if the machine has no rust at all.
+
 Presence is decided by running each tool once, not by looking it up on `$PATH`.
 The difference matters: a pyenv or asdf shim is executable and resolves fine,
 then exits 127 when you run it because the active version does not have the
@@ -237,6 +243,49 @@ Two implementation notes, both non-obvious:
 - The settings go through `on_init`, not `before_init`. The client copies
   `config.settings` when it is constructed, so anything written to them later
   than that changes a table nobody reads.
+
+### Rust: the workspace, not the crate
+
+The mirror image of the decision above. Python roots at the package because
+each package has its own interpreter; Rust roots at the cargo **workspace**,
+because cargo resolves every member crate against one `Cargo.lock` and
+rust-analyzer wants that whole graph in one process. Rooted at the nearest
+`Cargo.toml` instead, a workspace gets one analyzer per member, each holding
+its own copy of the dependency graph, and none of them able to follow a path
+dependency into a sibling crate.
+
+Finding the top is not a matter of looking for a file. `Cargo.lock` does sit at
+the workspace root and nowhere else, but libraries gitignore it, so a fresh
+checkout has none until something is built. `cargo metadata --no-deps` answers
+authoritatively in either case, so that is what runs, asynchronously, and its
+`workspace_root` is the root. Once one crate of a workspace is open the answer
+is already known, so opening the next file reuses that root rather than
+spawning another cargo.
+
+A `.rs` file with no `Cargo.toml` and no `rust-project.json` above it gets no
+server at all. rust-analyzer started there has no crate graph to work from, and
+what it does about that is put an error popup on screen, repeatedly, while
+answering nothing; single-file mode is not an alternative, `detachedFiles`
+having been removed. The file keeps its treesitter highlighting, and the
+statusline shows `rust_analyzer!` because a server that could have attached did
+not.
+
+`rust-analyzer` on `$PATH` is a rustup proxy, and a proxy picks its toolchain
+from the `rust-toolchain.toml` nearest its *working directory*. Started without
+one it inherits nvim's, so a project pinning a toolchain would be analyzed by
+whichever one the directory you launched from implies. It is started with the
+workspace root as its cwd instead.
+
+Two settings, both about staying out of the way:
+
+- `cargo.targetDir` puts the analyzer's build artifacts in `target/rust-analyzer`.
+  Sharing one target directory with the terminal means whichever got there
+  first holds the lock, so a check on save leaves `cargo run` sitting on
+  "Blocking waiting for file lock on build directory", and the other way round.
+  The cost is a second set of artifacts on disk.
+- `check.command` is `clippy` rather than `check`. It reports a superset, and
+  clippy is one of the components the dependency recipe installs, so it is not
+  reaching for something that might not be there.
 
 ## Treesitter and folding
 
