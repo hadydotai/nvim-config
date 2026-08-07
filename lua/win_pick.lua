@@ -152,6 +152,56 @@ function M.select(from, wins, start)
 	return chosen
 end
 
+--- Where "just open it, do not ask" goes: the window whoever is asking started
+--- out in, else the one before that, else any other ordinary window. nil means
+--- there is nowhere to put it yet.
+local function fallback(from, previous)
+	local wins = M.targets()
+	for _, win in ipairs({ from, previous }) do
+		if vim.tbl_contains(wins, win) then
+			return win
+		end
+	end
+	return wins[1]
+end
+
+--- Focus `win`, or make an editing split when there is none. Splitting rather
+--- than taking over whatever is on screen is what keeps the netrw sidebar
+--- intact when it is the only window left.
+function M.focus(win)
+	if win then
+		vim.api.nvim_set_current_win(win)
+	else
+		require("netrw_sidebar").new_editing_split("vsplit")
+	end
+end
+
+--- The <cr>/<s-cr> pair for a picker that opens something into a window: <cr>
+--- outlines a target unless there is only one, <s-cr> takes the obvious one
+--- without asking. `open(win, item)` does the opening and may get a nil window.
+--- Call this while building the picker, so it still sees where you came from.
+function M.actions(open)
+	local from = vim.api.nvim_get_current_win()
+	local previous = vim.fn.win_getid(vim.fn.winnr("#"))
+	return {
+		["<CR>"] = function(item)
+			local wins = M.targets()
+			if #wins < 2 then
+				return open(wins[1], item) -- nothing to disambiguate
+			end
+			local chosen = M.select(from, wins, fallback(from, previous))
+			if chosen then
+				open(chosen, item)
+			end
+		end,
+		["<S-CR>"] = function(item)
+			open(fallback(from, previous), item)
+		end,
+	}
+end
+
+M.FOOTER = " <CR> pick window   <S-CR> open here   <Esc> close "
+
 function M.setup()
 	set_hl()
 	vim.api.nvim_create_autocmd("ColorScheme", { callback = set_hl })

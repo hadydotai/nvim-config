@@ -4,8 +4,8 @@
 --   <cr>     outline a target window, hjkl to move, <cr> to open there
 --   <s-cr>   open in the window you came from, never the netrw sidebar
 --
--- The same two-key split as netrw's <cr>/<s-cr>, and the same outline overlay,
--- so wherever you pick a file from it lands the same way.
+-- The same two-key split as netrw's <cr>/<s-cr> and <leader>b's, through the
+-- same overlay, so wherever you pick a file from it lands the same way.
 --
 -- The listing is taken once when the dialog opens and filtered in memory
 -- afterwards, so typing costs nothing. 'findfunc' is still set as well, which
@@ -95,35 +95,7 @@ local function columns(path)
 	return { col }
 end
 
-local function edit(win, path)
-	if win then
-		vim.api.nvim_set_current_win(win)
-	else
-		-- nothing but the sidebar on screen, so make somewhere to put it
-		require("netrw_sidebar").new_editing_split("vsplit")
-	end
-	vim.cmd("edit " .. vim.fn.fnameescape(path))
-end
-
--- Where <s-cr> puts the file: the window <leader>f was pressed in, else the one
--- before that, else any other ordinary window. win_pick.targets() never returns
--- a netrw window, so pressing <leader>f in the sidebar opens into the editing
--- area instead of replacing the tree.
-local function default_win(from, previous)
-	local wins = win_pick.targets()
-	for _, win in ipairs({ from, previous }) do
-		if vim.tbl_contains(wins, win) then
-			return win
-		end
-	end
-	return wins[1] -- nil when the sidebar is the only window
-end
-
 function M.show()
-	-- captured before the float takes focus, since it displaces both
-	local from = vim.api.nvim_get_current_win()
-	local previous = vim.fn.win_getid(vim.fn.winnr("#"))
-
 	local files = scan()
 	if #files == 0 then
 		vim.notify("find: no files under " .. vim.fn.getcwd(), vim.log.levels.WARN)
@@ -138,22 +110,13 @@ function M.show()
 			return path
 		end,
 		fuzzy = true,
-		footer = " <CR> pick window   <S-CR> open here   <Esc> close ",
-		actions = {
-			["<CR>"] = function(path)
-				local wins = win_pick.targets()
-				if #wins < 2 then
-					return edit(wins[1], path)
-				end
-				local chosen = win_pick.select(from, wins, default_win(from, previous))
-				if chosen then
-					edit(chosen, path)
-				end
-			end,
-			["<S-CR>"] = function(path)
-				edit(default_win(from, previous), path)
-			end,
-		},
+		footer = win_pick.FOOTER,
+		-- built here rather than inside the picker, so it still sees the window
+		-- layout as it was before the float took focus
+		actions = win_pick.actions(function(win, path)
+			win_pick.focus(win)
+			vim.cmd("edit " .. vim.fn.fnameescape(path))
+		end),
 	})
 end
 
