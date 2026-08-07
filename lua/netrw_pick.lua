@@ -38,6 +38,28 @@ local function browse(islocal, word)
 	end
 end
 
+local function is_sidebar(win)
+	local lex = vim.t.netrw_lexbufnr
+	return lex ~= nil and vim.api.nvim_win_get_buf(win) == lex
+end
+
+-- Open into the current window instead of splitting. netrw_browse_split=4 means
+-- "open in the previous window", and with no other window netrw splits to invent
+-- one, which is why `nvim .` + <cr> used to push the file into a new pane above.
+-- A plain netrw should just take over its own window like stock netrw does; the
+-- sidebar is the exception, since replacing it would destroy it.
+local function browse_here(islocal, word)
+	local keep_split, keep_chgwin = vim.g.netrw_browse_split, vim.g.netrw_chgwin
+	vim.g.netrw_browse_split = 0
+	vim.g.netrw_chgwin = -1
+	local ok, err = pcall(browse, islocal, word)
+	vim.g.netrw_browse_split = keep_split
+	vim.g.netrw_chgwin = keep_chgwin or -1
+	if not ok then
+		error(err)
+	end
+end
+
 local function targets(exclude)
 	local out = {}
 	for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
@@ -164,11 +186,130 @@ local function select_window(from, wins)
 	return chosen
 end
 
+-- netrw's own behaviour for the current window layout
+local function open_default(islocal, word)
+	local win = vim.api.nvim_get_current_win()
+	if #targets(win) == 0 and not is_sidebar(win) then
+		return browse_here(islocal, word)
+	end
+	return browse(islocal, word)
+end
+
 function M.default(islocal)
 	local word = word_under_cursor()
 	if word then
-		browse(islocal, word)
+		open_default(islocal, word)
 	end
+end
+
+-- <c-w>s / <c-w>v inside netrw: open the file under the cursor in a fresh split
+-- of the editing area. netrw's own o/v keys do this by splitting the netrw
+-- window itself, which tears the sidebar apart.
+function M.split_open(islocal, cmd)
+	local word = word_under_cursor()
+	if not word then
+		return
+	end
+	if word:sub(-1) == "/" then
+		return browse(islocal, word) -- directories keep expanding as usual
+	end
+
+	local netrw_win = vim.api.nvim_get_current_win()
+	local created = require("netrw_sidebar").new_editing_split(cmd)
+	if not (created and vim.api.nvim_win_is_valid(created)) then
+		return
+	end
+
+	vim.api.nvim_set_current_win(netrw_win)
+	local keep_split, keep_chgwin = vim.g.netrw_browse_split, vim.g.netrw_chgwin
+	vim.g.netrw_browse_split = 0
+	-- window numbers can shift when the sidebar is re-pinned, so resolve this
+	-- after the split has settled
+	vim.g.netrw_chgwin = vim.api.nvim_win_get_number(created)
+	local ok, err = pcall(browse, islocal, word)
+	vim.g.netrw_browse_split = keep_split
+	vim.g.netrw_chgwin = keep_chgwin or -1
+	if not ok then
+		error(err)
+	end
+end
+
+-- The directory a new file should land in. In tree view NetrwTreeDir tracks the
+-- cursor, so pointing inside an expanded subdirectory creates the file there.
+local function base_dir(islocal)
+	if vim.g.netrw_liststyle == 3 then
+		local ok, dir = pcall(vim.fn["netrw#Call"], "NetrwTreeDir", islocal)
+		if ok and type(dir) == "string" and dir ~= "" then
+			return (dir:gsub("/$", ""))
+		end
+	end
+	local curdir = vim.b.netrw_curdir
+	return curdir and (curdir:gsub("/$", "")) or nil
+end
+
+local function refresh(islocal)
+	local dir = vim.fn["netrw#Call"]("NetrwBrowseChgDir", islocal, "./", 0)
+	vim.fn["netrw#Call"]("NetrwRefresh", islocal, dir)
+end
+
+-- Where a newly created file should be opened. Returns a window, or the string
+-- "split" when the sidebar needs a fresh editing pane made for it, or nil if the
+-- user cancelled the picker.
+local function destination(netrw_win)
+	local wins = targets(netrw_win)
+	if #wins >= 2 then
+		return select_window(netrw_win, wins)
+	end
+	if #wins == 1 then
+		return wins[1]
+	end
+	return is_sidebar(netrw_win) and "split" or netrw_win
+end
+
+-- `%` in netrw: netrw's own version does `:e dir/name` in the netrw window
+-- itself, leaving an unsaved buffer where the listing used to be. This creates
+-- the file on disk, refreshes the listing, and opens it in a real editing window.
+function M.create(islocal)
+	local dir = base_dir(islocal)
+	if not dir or dir == "" then
+		return
+	end
+
+	vim.fn.inputsave()
+	local ok_input, name = pcall(vim.fn.input, "New file: ")
+	vim.fn.inputrestore()
+	if not ok_input or name == nil or name == "" then
+		return
+	end
+
+	local path = name:sub(1, 1) == "/" and name or (dir .. "/" .. name)
+
+	-- a trailing slash means "make me a directory"; netrw's own `d` does this
+	if path:sub(-1) == "/" then
+		vim.fn.mkdir(path, "p")
+		refresh(islocal)
+		return
+	end
+
+	local netrw_win = vim.api.nvim_get_current_win()
+	local target = destination(netrw_win)
+	if not target then
+		return -- picker cancelled, so nothing is created
+	end
+
+	vim.fn.mkdir(vim.fn.fnamemodify(path, ":h"), "p")
+	if vim.fn.filereadable(path) == 0 then
+		-- never truncate: an existing file is just opened
+		vim.fn.writefile({}, path)
+	end
+	refresh(islocal)
+
+	if target == "split" then
+		require("netrw_sidebar").new_editing_split("vsplit")
+	else
+		vim.api.nvim_set_current_win(target)
+	end
+	vim.cmd("edit " .. vim.fn.fnameescape(path))
 end
 
 function M.choose(islocal)
@@ -181,8 +322,11 @@ function M.choose(islocal)
 	local wins = targets(netrw_win)
 
 	-- directories just expand or collapse, and a single candidate is unambiguous
-	if word:sub(-1) == "/" or #wins < 2 then
+	if word:sub(-1) == "/" then
 		return browse(islocal, word)
+	end
+	if #wins < 2 then
+		return open_default(islocal, word)
 	end
 
 	local chosen = select_window(netrw_win, wins)
@@ -216,11 +360,26 @@ function M.setup()
 			call luaeval('require("netrw_pick").default(_A)', a:islocal)
 			return ""
 		endfunction
+		function! NetrwPickSplit(islocal) abort
+			call luaeval('require("netrw_pick").split_open(_A, "split")', a:islocal)
+			return ""
+		endfunction
+		function! NetrwPickVsplit(islocal) abort
+			call luaeval('require("netrw_pick").split_open(_A, "vsplit")', a:islocal)
+			return ""
+		endfunction
+		function! NetrwPickNew(islocal) abort
+			call luaeval('require("netrw_pick").create(_A)', a:islocal)
+			return ""
+		endfunction
 	]])
 
 	vim.g.Netrw_UserMaps = {
 		{ "<cr>", "NetrwPickChoose" },
 		{ "<s-cr>", "NetrwPickDefault" },
+		{ "<c-w>s", "NetrwPickSplit" },
+		{ "<c-w>v", "NetrwPickVsplit" },
+		{ "%", "NetrwPickNew" },
 	}
 end
 
