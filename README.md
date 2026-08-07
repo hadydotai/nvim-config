@@ -18,6 +18,7 @@ covers the things that need explaining rather than listing.
 | `lua/deps.lua`       | what the machine needs, and how to get it per platform |
 | `lua/picker.lua`     | the modal filterable dialog `<leader>f/b/s/h` all use |
 | `lua/win_pick.lua`   | "which window should this open in", the outline overlay |
+| `lua/pairs.lua`      | auto-closing brackets, quotes and docstring fences   |
 | `lua/netrw_*.lua`    | the file tree: pinned sidebar, split picking, `%`    |
 | `lsp/*.lua`          | one file per language server                        |
 | `.data/ .state/ .cache/` | generated, gitignored: plugins, parsers, undo, logs |
@@ -59,6 +60,30 @@ screen a split is made rather than the tree being replaced.
 --exclude-standard` when there is a `.git`, so `.gitignore` is respected and
 `node_modules` is never walked. Outside a repository it falls back to a glob
 with an ignore list.
+
+## Pairs
+
+`( [ {` insert their closing half, `) ] }` step over one that is already there
+rather than doubling it, and `"`, `'` and `` ` `` do both depending on which
+side of a string you are on. `<BS>` between an empty pair takes both halves; `<CR>`
+between one opens a line and leaves the closer below it, indented by the
+filetype's own rules. Typing `"""` or `'''` lays down the closing fence too.
+
+The rules that keep it out of the way, all decided from the characters either
+side of the cursor:
+
+- No closer in front of a word. Typing `(` before `foo` is how you wrap it, so
+  the `)` belongs after `foo`, not against the cursor.
+- A quote against a word on either side is an apostrophe or a suffix, never the
+  start of a string, so `don't` types as itself.
+- An odd run of backslashes escapes the quote, an even one does not. In `"a\`
+  the quote ahead of the cursor is the pair's own, but stepping over it there
+  would leave the string open, so a literal one goes in instead.
+- Nothing at all in a buffer that is not a file, which is what keeps the picker
+  prompt an ordinary line to type in.
+
+Each key is an expr mapping that only reads the current line, so there is no
+state kept between keystrokes to go stale, and undo, macros and `.` all behave.
 
 ## LSP
 
