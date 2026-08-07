@@ -169,9 +169,7 @@ function M.toggle()
 	end
 
 	local last_file = vim.api.nvim_buf_get_name(0)
-	vim.cmd("Lexplore")
-
-	local opened = sidebar.window()
+	local opened = sidebar.open()
 	if not opened then
 		return
 	end

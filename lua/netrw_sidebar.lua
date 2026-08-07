@@ -64,6 +64,19 @@ local function target_width(side)
 	return -winsize
 end
 
+-- The width :Lexplore should have opened it at. netrw reads g:netrw_winsize as
+-- a percentage of the window it happens to be splitting, so opening the sidebar
+-- from an already split editing area gives you a fraction of a fraction: a
+-- quarter of half the screen is an eighth. It is meant to be a share of the
+-- screen, and not to depend on which window you were in at the time.
+local function initial_width()
+	local winsize = vim.g.netrw_winsize or 25
+	if winsize > 0 then
+		return math.max(1, math.floor(vim.o.columns * winsize / 100))
+	end
+	return -winsize -- a negative winsize is an absolute column count
+end
+
 -- Put the sidebar back on the left at `width`, leaving the cursor where it was.
 -- Re-asserted unconditionally rather than only when column 0 is lost: <c-w>J
 -- keeps the sidebar at column 0 but spans the moved window across the full
@@ -142,10 +155,22 @@ function M.window()
 	return sidebar()
 end
 
+--- Open the sidebar at the width it was meant to have, and return its window.
+--- Every caller goes through here rather than :Lexplore directly, so the
+--- sidebar comes up the same size whatever the layout was beforehand.
+function M.open()
+	vim.cmd("Lexplore")
+	local side = sidebar()
+	if side then
+		pin(side, initial_width())
+	end
+	return side
+end
+
 function M.focus()
 	local side = sidebar()
 	if not side then
-		vim.cmd("Lexplore")
+		M.open()
 		return
 	end
 
