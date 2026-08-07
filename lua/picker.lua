@@ -100,6 +100,9 @@ local function layout(items, opts, footer)
 		end
 	end
 	for i = 1, #width do
+		if opts.max and opts.max[i] then
+			width[i] = math.min(width[i], opts.max[i])
+		end
 		if width[i] > 0 then
 			keep[#keep + 1] = i
 		end
@@ -115,6 +118,13 @@ local function layout(items, opts, footer)
 	end
 	local min_flex = (opts.min and opts.min[flex]) or 1
 	width[flex] = math.max(min_flex, math.min(width[flex] or 0, room - fixed))
+
+	-- A list that is re-asked for on every keystroke cannot be measured ahead:
+	-- what comes back next is nothing like what was measured. Take all the room
+	-- there is, once, so the float never resizes under the cursor.
+	if opts.query then
+		width[flex] = math.max(min_flex, room - fixed)
+	end
 
 	-- Never narrower than the chrome. The title and footer are part of the UI,
 	-- and a list of short rows would otherwise clip them off the border.
@@ -239,12 +249,73 @@ local function draw()
 	vim.api.nvim_win_set_config(v.list_win, cfg)
 end
 
+--- Turn caller values into rows: columns rendered once, haystack computed once.
+local function prepare(values, opts)
+	local items = {}
+	for i, value in ipairs(values) do
+		local cols = opts.columns(value)
+		local hay = opts.search and opts.search(value)
+		if not hay then
+			local parts = {}
+			for _, c in ipairs(cols) do
+				parts[#parts + 1] = c.text
+			end
+			hay = table.concat(parts, " ")
+		end
+		items[i] = { value = value, cols = cols, hay = hay, hay_lower = hay:lower() }
+	end
+	return items
+end
+
+-- Everything, in the order it arrived. `toks` is only for highlighting here:
+-- the list has already been narrowed by whoever produced it.
+local function show_all(v, toks)
+	v.shown, v.toks = {}, toks or {}
+	for i, it in ipairs(v.items) do
+		v.shown[i] = { item = it }
+	end
+	v.index = #v.shown > 0 and 1 or 0
+	draw()
+end
+
+local DEBOUNCE = 120 -- ms of quiet before a query goes out
+
+-- Ask the caller's query function again and swap the whole list for the answer.
+-- Replies can land out of order, so a generation counter drops any that a later
+-- keystroke has already superseded.
+local function refetch(v, text)
+	v.generation = v.generation + 1
+	local gen = v.generation
+	v.opts.query(text, function(values)
+		if view ~= v or gen ~= v.generation then
+			return
+		end
+		v.items = prepare(values or {}, v.opts)
+		show_all(v, tokens(text))
+	end)
+end
+
 local function filter()
 	local v = view
 	if not v then
 		return
 	end
 	local query = vim.api.nvim_buf_get_lines(v.prompt_buf, 0, 1, false)[1] or ""
+
+	-- With a query function the matching belongs to whoever answers it. A
+	-- language server matches its own way, and narrowing its reply again here
+	-- would only throw away rows it meant to return.
+	if v.opts.query then
+		v.pending = v.pending + 1
+		local seq = v.pending
+		vim.defer_fn(function()
+			if view == v and v.pending == seq then
+				refetch(v, query)
+			end
+		end, DEBOUNCE)
+		return
+	end
+
 	if query:match("^%s*$") then
 		v.shown, v.toks = {}, {}
 		for i, it in ipairs(v.items) do
@@ -318,10 +389,13 @@ end
 ---   columns  function(item) -> { { text, hl, right, spans }, ... }
 ---   search   function(item) -> the string the query is matched against
 ---   min      minimum width per column; a column that stays 0 is dropped
+---   max      maximum width per column, for one that could be arbitrarily long
 ---   flex     which column absorbs the leftover width (default: the last one)
 ---   fuzzy    match with matchfuzzypos instead of AND-ed substrings
 ---   footer   right-aligned hint text
 ---   actions  map of lhs to function(item); the list closes before it runs
+---   query    function(text, done); when given, typing re-asks it for the whole
+---            list instead of narrowing `items`, which stay the first answer
 function M.open(opts)
 	if view then
 		return
@@ -332,19 +406,7 @@ function M.open(opts)
 	end
 	set_hl()
 
-	local items = {}
-	for i, value in ipairs(opts.items) do
-		local cols = opts.columns(value)
-		local hay = opts.search and opts.search(value)
-		if not hay then
-			local parts = {}
-			for _, c in ipairs(cols) do
-				parts[#parts + 1] = c.text
-			end
-			hay = table.concat(parts, " ")
-		end
-		items[i] = { value = value, cols = cols, hay = hay, hay_lower = hay:lower() }
-	end
+	local items = prepare(opts.items, opts)
 	if #items == 0 then
 		vim.notify("picker: nothing to show", vim.log.levels.WARN)
 		return
@@ -407,6 +469,9 @@ function M.open(opts)
 		shown = {},
 		toks = {},
 		fuzzy = opts.fuzzy,
+		opts = opts,
+		generation = 0, -- replies older than this one are stale
+		pending = 0, -- keystrokes waiting out the debounce
 		index = 1,
 		lay = lay,
 		list_buf = list_buf,
@@ -476,7 +541,11 @@ function M.open(opts)
 		end,
 	})
 
-	filter()
+	if opts.query then
+		show_all(view, {}) -- opts.items is already the answer to the empty query
+	else
+		filter()
+	end
 	vim.cmd("startinsert")
 end
 

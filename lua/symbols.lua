@@ -218,12 +218,138 @@ function M.show()
 	end)
 end
 
+--------------------------------------------------------------------------- --
+-- across the workspace
+--------------------------------------------------------------------------- --
+
+-- Every server that answers workspace/symbol, not only the ones attached to
+-- this buffer, so <leader>S works from netrw or a scratch buffer too.
+local function searchers()
+	return vim.lsp.get_clients({ method = "workspace/symbol" })
+end
+
+-- Unlike documentSymbol, the query goes to the server: matching is its own, it
+-- is the only thing that has the whole workspace indexed, and what it knows
+-- about grows as it loads more of the project. So this is asked again on every
+-- keystroke rather than fetched once and narrowed here.
+local function search(query, done)
+	local clients = searchers()
+	local out, left = {}, #clients
+	if left == 0 then
+		return done(out)
+	end
+	for _, client in ipairs(clients) do
+		client:request("workspace/symbol", { query = query }, function(_, result)
+			for _, sym in ipairs(result or {}) do
+				local loc = sym.location
+				-- A WorkspaceSymbol may carry a uri with no range, meaning "ask
+				-- workspaceSymbol/resolve for it". Opening the file at the top is
+				-- a fair answer and saves a second round trip.
+				if loc and loc.uri then
+					local container = sym.containerName
+					if container == vim.NIL or container == "" then
+						container = nil
+					end
+					local start = loc.range and loc.range.start
+					out[#out + 1] = {
+						kind = vim.lsp.protocol.SymbolKind[sym.kind] or "Unknown",
+						path = container and (container .. "." .. sym.name) or sym.name,
+						prefix_len = container and (#container + 1) or 0,
+						file = vim.uri_to_fname(loc.uri),
+						lnum = start and start.line + 1 or 1,
+						character = start and start.character or 0,
+						encoding = client.offset_encoding,
+					}
+				end
+			end
+			left = left - 1
+			if left == 0 then
+				done(out)
+			end
+		end)
+	end
+end
+
+local WHERE_WIDTH = 36 -- columns the file:line field is allowed
+
+-- Cut the head off, not the tail. Results reach outside the project (a server
+-- indexes its own runtime too), and the front of those paths is the part that
+-- says nothing while the end is the file you are choosing between.
+local function shorten(text, width)
+	local chars = vim.fn.strchars(text)
+	if vim.fn.strdisplaywidth(text) <= width then
+		return text
+	end
+	return "..." .. vim.fn.strcharpart(text, chars - (width - 3))
+end
+
+-- kind, dotted path, where it lives. The path flexes; the file is capped so one
+-- deeply buried result cannot squeeze every name off the screen.
+local function ws_columns(item)
+	local name = { text = item.path, hl = "SymbolName" }
+	if item.prefix_len > 0 then
+		name.spans = { { 0, item.prefix_len, "SymbolParent" } }
+	end
+	local where = vim.fn.fnamemodify(item.file, ":~:.") .. ":" .. item.lnum
+	return {
+		{ text = item.kind, hl = KIND_HL[item.kind] or "SymbolKind" },
+		name,
+		{ text = shorten(where, WHERE_WIDTH), hl = "SymbolLine", right = true },
+	}
+end
+
+local function ws_jump(win, item)
+	win_pick.focus(win)
+	vim.cmd("normal! m'") -- leave a jumplist entry, so <C-o> comes back
+	vim.cmd("edit " .. vim.fn.fnameescape(item.file))
+	local buf = vim.api.nvim_get_current_buf()
+	local last = vim.api.nvim_buf_line_count(buf)
+	local lnum = math.min(item.lnum, last)
+	pcall(vim.api.nvim_win_set_cursor, 0, { lnum, byte_col(buf, lnum, item.character, item.encoding) })
+	vim.cmd("normal! zz")
+end
+
+function M.workspace()
+	if #searchers() == 0 then
+		vim.notify(
+			"symbols: no attached language server answers workspace/symbol (pylsp does not)",
+			vim.log.levels.WARN
+		)
+		return
+	end
+
+	search("", function(items)
+		if #items == 0 then
+			vim.notify("symbols: the workspace index is empty so far", vim.log.levels.WARN)
+			return
+		end
+		picker.open({
+			title = "Workspace symbols",
+			items = items,
+			columns = ws_columns,
+			search = function(item)
+				return item.path
+			end,
+			flex = 2,
+			min = { 6, 11, 8 },
+			max = { [3] = WHERE_WIDTH },
+			footer = win_pick.FOOTER,
+			query = search,
+			actions = win_pick.actions(ws_jump),
+		})
+	end)
+end
+
 set_hl()
 vim.api.nvim_create_autocmd("ColorScheme", { callback = set_hl })
 
 vim.keymap.set("n", "<leader>s", M.show, {
 	silent = true,
 	desc = "List symbols in this buffer: <CR> chooses a window, <S-CR> jumps here",
+})
+vim.keymap.set("n", "<leader>S", M.workspace, {
+	silent = true,
+	desc = "Search symbols across the workspace, the server matching as you type",
 })
 
 return M
