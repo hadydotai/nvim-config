@@ -152,9 +152,17 @@ function M.select(from, wins, start)
 	return chosen
 end
 
+-- Only the :Lexplore sidebar, identified by the buffer number Lexplore records.
+-- A netrw buffer opened some other way (`nvim .`, :Explore) is an ordinary
+-- window that happens to be showing a directory.
+local function is_sidebar(win)
+	local lex = vim.t.netrw_lexbufnr
+	return lex ~= nil and vim.api.nvim_win_get_buf(win) == lex
+end
+
 --- Where "just open it, do not ask" goes: the window whoever is asking started
 --- out in, else the one before that, else any other ordinary window. nil means
---- there is nowhere to put it yet.
+--- there is nowhere to put it and one has to be made.
 local function fallback(from, previous)
 	local wins = M.targets()
 	for _, win in ipairs({ from, previous }) do
@@ -162,12 +170,22 @@ local function fallback(from, previous)
 			return win
 		end
 	end
-	return wins[1]
+	if wins[1] then
+		return wins[1]
+	end
+	-- Nothing but netrw on screen. A plain netrw window should just be taken
+	-- over, which is what stock netrw does with <cr> and what `nvim .` then
+	-- opening a file has always felt like. Only the pinned sidebar is worth
+	-- keeping, and that is the one case left with nowhere to put the file.
+	if from and vim.api.nvim_win_is_valid(from) and not is_sidebar(from) then
+		return from
+	end
+	return nil
 end
 
---- Focus `win`, or make an editing split when there is none. Splitting rather
---- than taking over whatever is on screen is what keeps the netrw sidebar
---- intact when it is the only window left.
+--- Focus `win`, or make an editing split when there is none. By the time this
+--- gets a nil the only window on screen is the pinned sidebar, which is the one
+--- thing that must not be replaced.
 function M.focus(win)
 	if win then
 		vim.api.nvim_set_current_win(win)
@@ -187,7 +205,8 @@ function M.actions(open)
 		["<CR>"] = function(item)
 			local wins = M.targets()
 			if #wins < 2 then
-				return open(wins[1], item) -- nothing to disambiguate
+				-- nothing to disambiguate, so <cr> is <s-cr>
+				return open(fallback(from, previous), item)
 			end
 			local chosen = M.select(from, wins, fallback(from, previous))
 			if chosen then
