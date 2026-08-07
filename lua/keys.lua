@@ -138,6 +138,13 @@ function M.declare(list)
 	end
 end
 
+--- vim.keymap.set without recording, for throwaway keys inside a transient UI
+--- buffer. Those are implementation detail, not part of the key surface this
+--- list is meant to describe.
+function M.untracked(mode, lhs, rhs, opts)
+	return raw.set(mode, lhs, rhs, opts)
+end
+
 --- Every recorded mapping, grouped global-first and then by defining file.
 function M.list()
 	local out = {}

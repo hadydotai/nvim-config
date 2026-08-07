@@ -1,5 +1,6 @@
 require("paths") -- first: redirects stdpath() into this directory
 require("keys").setup() -- then: it records the mappings everything below sets
+require("deps").setup()
 require("options")
 require("lsp")
 require("colorscheme")
