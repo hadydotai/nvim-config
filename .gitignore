@@ -1,0 +1,5 @@
+# Everything Neovim generates lives here (see lua/paths.lua) but none of it
+# belongs in the repo: plugins, parsers, undo history, swap, shada, logs.
+.data/
+.state/
+.cache/
