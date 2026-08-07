@@ -77,6 +77,7 @@ alone. The full set is in `<leader>h`; the ones worth knowing up front:
 | `gri`/`grt` | go to implementation / type definition                    |
 | `<C-s>`     | signature help, in insert mode                            |
 | `<leader>s` | symbols in this buffer, as a dialog (`gO` is the same list in the quickfix list) |
+| `<leader>S` | symbols across the workspace, the server matching as you type |
 
 `gd` is the one addition, and only because plain `gd` is an older Vim key that
 means something else: "go to local declaration", a backwards keyword search
@@ -92,6 +93,41 @@ declared inside a function body, or inside a value holding one, is dropped:
 without that, half the list of a 300-line module is caught exceptions and loop
 variables. pylsp is also told `jedi_symbols.include_import_symbols = false`,
 which keeps every `from x import Y` line out of the list.
+
+`<leader>S` is the same dialog but the typing goes to the server, not to the
+filter: only the server has the workspace indexed, each one matches its own
+way, and what it knows about grows as it loads more of the project. So the
+list is replaced on every keystroke, debounced, with a generation counter
+dropping replies a later keystroke has already superseded.
+
+**pylsp does not implement `workspace/symbol`**, so `<leader>S` does nothing
+in a Python project and says so. It is not a configuration problem: pylsp only
+has the `pylsp_document_symbols` hook, and the request comes back `-32601
+Method Not Found`. lua_ls and tsgo both answer it. Getting it for Python means
+a different server (pyright, basedpyright), which is a trade against the venv
+handling below.
+
+### Backslashes in the hover float
+
+pylsp docstrings sometimes come back as `read\_file` rather than `read_file`,
+which is ugly and copies wrong. Nothing here is doing it, and Neovim is not
+either: it renders the markdown source as given, highlighting fenced code
+blocks without interpreting inline markup, so any escaping the server did stays
+on screen.
+
+pylsp runs the docstring through `docstring-to-markdown` first. If the
+docstring is in a format that library recognises (Google, NumPy, reST) it is
+converted properly and nothing is escaped. If it is not, `_utils.format_docstring`
+falls back to `escape_markdown`, which backslash-escapes `\ * _ # [ ]` over the
+whole text. A plain prose docstring is exactly the unrecognised case:
+
+```
+"Wraps read_file and write_file."   ->   "Wraps read\_file and write\_file."
+```
+
+So the escaping tracks docstring style, not the symbol. The same function
+also replaces every run of two spaces with U+00A0, which copies as a
+non-breaking space and is worth knowing about for the same reason.
 
 ### Status
 
