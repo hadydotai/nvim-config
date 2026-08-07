@@ -33,7 +33,9 @@ function _G._statusline()
 		end
 	end
 
-	return "%#StlMode# " .. mode .. " %*" .. branch .. " " .. path .. "%=" .. diag .. vim.bo.filetype .. " %l:%c"
+	local lsp = require("lspstatus").component()
+
+	return "%#StlMode# " .. mode .. " %*" .. branch .. " " .. path .. "%=" .. diag .. lsp .. vim.bo.filetype .. " %l:%c"
 end
 
 vim.api.nvim_create_autocmd("BufEnter", {

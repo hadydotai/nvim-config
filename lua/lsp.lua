@@ -1,7 +1,13 @@
 -- lsp setup
 --
 
-vim.lsp.enable({ "lua_ls", "pylsp", "tsgo" })
+local M = {}
+
+-- Named here rather than passed inline so lspstatus.lua can tell which servers
+-- were meant to attach to a buffer, and mark the ones that did not.
+M.servers = { "lua_ls", "pylsp", "tsgo" }
+
+vim.lsp.enable(M.servers)
 vim.diagnostic.config({ virtual_text = true })
 
 vim.api.nvim_create_autocmd("LspAttach", {
@@ -14,3 +20,5 @@ vim.api.nvim_create_autocmd("LspAttach", {
 })
 
 vim.cmd("set completeopt+=noselect")
+
+return M

@@ -124,8 +124,9 @@ function M.new_editing_split(cmd)
 			vim.cmd(cmd)
 		else
 			-- sidebar is the only window; make an empty one beside it rather
-			-- than cloning netrw into a second pane
-			vim.cmd(cmd == "split" and "belowright new" or "belowright vnew")
+			-- than cloning netrw into a second pane. Matched rather than
+			-- compared, so callers can pass modifiers ("belowright split").
+			vim.cmd(cmd:match("vsplit") and "belowright vnew" or "belowright new")
 		end
 	else
 		vim.cmd(cmd)
