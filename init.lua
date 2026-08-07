@@ -1,0 +1,6 @@
+require("options")
+require("lsp")
+require("colorscheme")
+require("netrw")
+require("keymap")
+require("statusline")
