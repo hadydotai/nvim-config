@@ -17,7 +17,8 @@
 ---
 --- In a monorepo the root is the package, not the checkout, because
 --- pyproject.toml comes before .git in root_markers below. So each package
---- gets its own client pointed at its own .venv.
+--- gets its own client pointed at its own .venv, falling back to the nearest
+--- one above it but never past the directory nvim was started in.
 ---
 --- Configuration options are documented [here](https://github.com/python-lsp/python-lsp-server/blob/develop/CONFIGURATION.md).
 
@@ -100,8 +101,25 @@ local function intercept(client)
 	end
 end
 
+--- How far up the search for a .venv is allowed to go: the directory nvim was
+--- started in. Unbounded it runs all the way to /, so a stray .venv anywhere
+--- above the project quietly becomes its environment, and a stale one whose
+--- interpreter has been deleted takes hover, completion and imports down with
+--- it while looking for all the world like a broken server.
+---
+--- A project root can sit above the directory you started in, when you open
+--- nvim inside a package rather than at the top of it. Nothing above that root
+--- is worth reaching for either, so there the root is its own ceiling.
+local function ceiling(root)
+	local start = require("lsp").start_dir
+	if start and (root == start or vim.startswith(root, start .. "/")) then
+		return start
+	end
+	return root
+end
+
 --- The virtualenv a project belongs to: an activated one wins, then the
---- nearest .venv at or above the project root.
+--- nearest .venv between the project root and the tree you opened.
 local function venv_for(root)
 	if vim.env.VIRTUAL_ENV and vim.env.VIRTUAL_ENV ~= "" then
 		return vim.env.VIRTUAL_ENV
@@ -109,7 +127,16 @@ local function venv_for(root)
 	if not root then
 		return nil
 	end
-	local found = vim.fs.find(".venv", { path = root, upward = true, type = "directory", limit = 1 })
+	root = vim.fs.normalize(root)
+	local found = vim.fs.find(".venv", {
+		path = root,
+		upward = true,
+		type = "directory",
+		limit = 1,
+		-- `stop` is exclusive, so it gets the parent: the ceiling itself is part
+		-- of the project and has to stay searchable.
+		stop = vim.fs.dirname(ceiling(root)),
+	})
 	return found[1]
 end
 

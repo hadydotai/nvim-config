@@ -188,6 +188,15 @@ practice is the global one: every project and third-party import comes back
 unresolved, and go-to-definition, hover and completion are all dead for
 anything outside the standard library.
 
+That upward search stops at the directory nvim was started in. The tree you
+opened is the project; a `.venv` above it belongs to something else. Unbounded
+the search runs to `/`, so a forgotten `.venv` in `$HOME` becomes the
+environment for every project under it, and a stale one whose interpreter has
+since been deleted takes hover and imports down with it while looking exactly
+like a broken server. The one exception is opening nvim *inside* a package, in
+which case the package root sits above where you started and is its own
+ceiling.
+
 The binary to run is chosen in this order:
 
 1. `<venv>/bin/pylsp`, if the project installs its own. That is the only one

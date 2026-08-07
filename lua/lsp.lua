@@ -10,6 +10,12 @@ local M = {}
 -- were meant to attach to a buffer, and mark the ones that did not.
 M.servers = { "lua_ls", "pylsp", "tsgo" }
 
+-- The directory nvim was started in, read here because init.lua requires this
+-- before anything has had the chance to :cd. lsp/pylsp.lua treats it as the
+-- ceiling on its upward search for a .venv: the tree you opened is the project,
+-- and whatever sits above it is somebody else's.
+M.start_dir = vim.fs.normalize(vim.fn.getcwd())
+
 vim.lsp.enable(M.servers)
 vim.diagnostic.config({ virtual_text = true })
 
