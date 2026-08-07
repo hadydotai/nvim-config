@@ -21,6 +21,85 @@
 ---
 --- Configuration options are documented [here](https://github.com/python-lsp/python-lsp-server/blob/develop/CONFIGURATION.md).
 
+--------------------------------------------------------------------------- --
+-- docstring escaping
+--------------------------------------------------------------------------- --
+
+-- pylsp runs every docstring through docstring-to-markdown, and when that does
+-- not recognise the format, which plain prose does not count as, _utils
+-- .format_docstring falls back to escape_markdown: a blanket backslash in front
+-- of \ * _ # [ ], plus every run of two spaces swapped for U+00A0. Neovim
+-- renders the Markdown source as it is given, highlighting fenced blocks
+-- without interpreting inline markup, so read\_file stays on screen and, worse,
+-- comes out of the float that way when you copy it.
+local ESCAPED = "\\([\\*_#%[%]])" -- exactly the set escape_markdown escapes
+local NBSP = "\194\160"
+
+-- Line by line, and never inside a fence: the signature pylsp puts in a
+-- ```python block never went through the escaping, and a backslash in there is
+-- code that means it.
+local function unescape(text)
+	local out, fenced = {}, false
+	for _, line in ipairs(vim.split(text, "\n", { plain = true })) do
+		if line:match("^%s*```") then
+			fenced = not fenced
+		elseif not fenced then
+			line = line:gsub(ESCAPED, "%1"):gsub(NBSP, " ")
+		end
+		out[#out + 1] = line
+	end
+	return table.concat(out, "\n")
+end
+
+--- Rewrite a MarkupContent in place. Anything else is left alone: only pylsp's
+--- markdown goes through the escaping, and a MarkedString from some other
+--- server has no business being touched here.
+local function clean(content)
+	if type(content) == "table" and content.kind == "markdown" and type(content.value) == "string" then
+		content.value = unescape(content.value)
+	end
+end
+
+-- The replies worth cleaning, which are the ones format_docstring feeds. The
+-- third caller is completion documentation, left as it comes: that is a preview
+-- read in passing rather than something copied out of.
+local SCRUB = {
+	["textDocument/hover"] = function(result)
+		if result then
+			clean(result.contents)
+		end
+	end,
+	["textDocument/signatureHelp"] = function(result)
+		for _, sig in ipairs(result and result.signatures or {}) do
+			clean(sig.documentation)
+			for _, param in ipairs(sig.parameters or {}) do
+				clean(param.documentation)
+			end
+		end
+	end,
+}
+
+--- Clean these replies on the way back, for this client only.
+---
+--- Not through the config's `handlers` table, which would be the obvious place:
+--- vim.lsp.buf.hover() hands its own handler straight to client:request, so a
+--- handler registered for the method never gets a look in. The client's own
+--- request method is the one point every caller has to come through.
+local function intercept(client)
+	local request = client.request
+	client.request = function(self, method, params, handler, bufnr)
+		local scrub = SCRUB[method]
+		if scrub and handler then
+			local inner = handler
+			handler = function(err, result, ...)
+				scrub(result)
+				return inner(err, result, ...)
+			end
+		end
+		return request(self, method, params, handler, bufnr)
+	end
+end
+
 --- The virtualenv a project belongs to: an activated one wins, then the
 --- nearest .venv at or above the project root.
 local function venv_for(root)
@@ -65,6 +144,7 @@ return {
 	-- nobody reads. Here we can set them on the client itself and resend, and it
 	-- still lands before the first file is opened.
 	on_init = function(client)
+		intercept(client)
 		local venv = venv_for(client.root_dir)
 		if not venv then
 			return

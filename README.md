@@ -109,25 +109,38 @@ handling below.
 
 ### Backslashes in the hover float
 
-pylsp docstrings sometimes come back as `read\_file` rather than `read_file`,
-which is ugly and copies wrong. Nothing here is doing it, and Neovim is not
-either: it renders the markdown source as given, highlighting fenced code
-blocks without interpreting inline markup, so any escaping the server did stays
-on screen.
+pylsp docstrings come back as `read\_file` rather than `read_file` often
+enough to be a nuisance, and they copy out of the float that way.
 
-pylsp runs the docstring through `docstring-to-markdown` first. If the
-docstring is in a format that library recognises (Google, NumPy, reST) it is
-converted properly and nothing is escaped. If it is not, `_utils.format_docstring`
-falls back to `escape_markdown`, which backslash-escapes `\ * _ # [ ]` over the
-whole text. A plain prose docstring is exactly the unrecognised case:
+pylsp runs each docstring through `docstring-to-markdown` first. If the format
+is one that library recognises (Google, NumPy, reST) it is converted properly
+and nothing is escaped. If it is not, `_utils.format_docstring` falls back to
+`escape_markdown`, which backslash-escapes `\ * _ # [ ]` across the whole text
+and swaps every run of two spaces for U+00A0. A plain prose docstring is
+exactly the unrecognised case:
 
 ```
 "Wraps read_file and write_file."   ->   "Wraps read\_file and write\_file."
 ```
 
-So the escaping tracks docstring style, not the symbol. The same function
-also replaces every run of two spaces with U+00A0, which copies as a
-non-breaking space and is worth knowing about for the same reason.
+So it tracks docstring *style*, not the symbol: the same file will have some
+hovers escaped and some not. Neovim renders the markdown source as given,
+highlighting fenced blocks without interpreting inline markup, so whatever the
+server escaped stays on screen.
+
+`lsp/pylsp.lua` undoes it on the way in, for this server only. Line by line and
+never inside a fence, since the signature pylsp puts in a ```` ```python ````
+block never went through the escaping and a backslash in there is code. Only
+the six characters `escape_markdown` escapes are unescaped, so a real `#`
+heading or `` `code span` `` from the converted path survives untouched.
+
+The hook is `on_init` wrapping the client's own `request` method, which is not
+where you would expect it. The obvious place is the config's `handlers` table,
+but `vim.lsp.buf.hover()` passes its own handler straight to `client:request`,
+so a handler registered per method is never consulted. Wrapping `request` is
+the one point every caller has to come through. It covers hover and signature
+help; completion documentation takes the same route through the server and is
+left as it comes, being a preview read in passing rather than copied.
 
 ### Status
 
