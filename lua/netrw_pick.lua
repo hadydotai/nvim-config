@@ -150,7 +150,13 @@ end
 
 local function hide()
 	if overlay_win and vim.api.nvim_win_is_valid(overlay_win) then
-		vim.api.nvim_win_close(overlay_win, true)
+		-- The overlay is internal UI, so close it without firing WinClosed and
+		-- friends: autocmd errors would otherwise propagate straight out of
+		-- nvim_win_close and abort the picker mid-cancel.
+		local keep = vim.o.eventignore
+		vim.o.eventignore = "all"
+		pcall(vim.api.nvim_win_close, overlay_win, true)
+		vim.o.eventignore = keep
 	end
 	overlay_win = nil
 end
@@ -275,13 +281,18 @@ function M.create(islocal)
 		return
 	end
 
-	vim.fn.inputsave()
-	local ok_input, name = pcall(vim.fn.input, "New file: ")
-	vim.fn.inputrestore()
-	if not ok_input or name == nil or name == "" then
-		return
-	end
+	-- vim.ui.input rather than vim.fn.input: netrw's own `%` wraps input() in
+	-- inputsave(), which drops pending typeahead, and this keeps the prompt
+	-- swappable for any ui override
+	vim.ui.input({ prompt = "New file: " }, function(name)
+		if name == nil or name == "" then
+			return
+		end
+		M.create_at(islocal, dir, name)
+	end)
+end
 
+function M.create_at(islocal, dir, name)
 	local path = name:sub(1, 1) == "/" and name or (dir .. "/" .. name)
 
 	-- a trailing slash means "make me a directory"; netrw's own `d` does this
