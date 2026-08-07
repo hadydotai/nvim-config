@@ -74,6 +74,16 @@ return {
 		})
 		client:notify("workspace/didChangeConfiguration", { settings = client.settings })
 	end,
+	settings = {
+		pylsp = {
+			plugins = {
+				-- Otherwise every `from x import Y` shows up in the document
+				-- symbol list as a symbol of its own, so <leader>s in a file with
+				-- a dozen imports opens on a dozen rows that are not in it.
+				jedi_symbols = { include_import_symbols = false },
+			},
+		},
+	},
 	filetypes = { "python" },
 	root_markers = {
 		"pyproject.toml",

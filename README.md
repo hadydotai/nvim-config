@@ -16,7 +16,7 @@ covers the things that need explaining rather than listing.
 | `init.lua`           | the load order, and nothing else                     |
 | `lua/paths.lua`      | redirects everything Neovim writes into this directory |
 | `lua/deps.lua`       | what the machine needs, and how to get it per platform |
-| `lua/picker.lua`     | the modal filterable dialog `<leader>f/b/h` all use  |
+| `lua/picker.lua`     | the modal filterable dialog `<leader>f/b/s/h` all use |
 | `lua/win_pick.lua`   | "which window should this open in", the outline overlay |
 | `lua/netrw_*.lua`    | the file tree: pinned sidebar, split picking, `%`    |
 | `lsp/*.lua`          | one file per language server                        |
@@ -40,11 +40,12 @@ tool installed.
 
 ## Opening things
 
-`<leader>f` (files), `<leader>b` (buffers) and `<leader>h` (mappings) are the
-same dialog. Type to narrow, `<C-n>`/`<C-p>` to move, `<Esc>` to close.
+`<leader>f` (files), `<leader>b` (buffers), `<leader>s` (symbols in this
+buffer) and `<leader>h` (mappings) are the same dialog. Type to narrow,
+`<C-n>`/`<C-p>` to move, `<Esc>` to close.
 
-`<leader>f` and `<leader>b` share netrw's two-key convention for where a thing
-lands, through the same overlay:
+`<leader>f`, `<leader>b` and `<leader>s` share netrw's two-key convention for
+where a thing lands, through the same overlay:
 
 - `<CR>` outlines a candidate window. `hjkl` moves the outline, `<CR>` opens
   there. With only one candidate it opens straight away.
@@ -60,6 +61,37 @@ screen a split is made rather than the tree being replaced.
 with an ignore list.
 
 ## LSP
+
+### Keys
+
+Neovim maps most of the LSP verbs itself, and this configuration leaves them
+alone. The full set is in `<leader>h`; the ones worth knowing up front:
+
+| key         | what it does                                              |
+| ----------- | --------------------------------------------------------- |
+| `gd`        | go to definition (the only one added here)                |
+| `K`         | documentation for the symbol under the cursor             |
+| `grr`       | references, in the quickfix list                          |
+| `grn`       | rename                                                    |
+| `gra`       | code actions                                              |
+| `gri`/`grt` | go to implementation / type definition                    |
+| `<C-s>`     | signature help, in insert mode                            |
+| `<leader>s` | symbols in this buffer, as a dialog (`gO` is the same list in the quickfix list) |
+
+`gd` is the one addition, and only because plain `gd` is an older Vim key that
+means something else: "go to local declaration", a backwards keyword search
+inside the current function. In Python that lands on whatever happened to match
+textually rather than on the definition, which reads as the language server
+being broken when it is working fine.
+
+`<leader>s` shows what the file *defines*, not every name in it. Servers
+answer `textDocument/documentSymbol` in two different shapes, one nested and
+one flat, and both are normalised into the same dotted `Container.name` rows,
+so filtering by an enclosing class works whichever server replied. Anything
+declared inside a function body, or inside a value holding one, is dropped:
+without that, half the list of a 300-line module is caught exceptions and loop
+variables. pylsp is also told `jedi_symbols.include_import_symbols = false`,
+which keeps every `from x import Y` line out of the list.
 
 ### Status
 
