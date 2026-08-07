@@ -1,5 +1,14 @@
 vim.g.mapleader = " "
-vim.keymap.set("n", "<leader>e", ":Lexplore<cr>", { silent = true })
+vim.keymap.set(
+	"n", "<leader>e",
+	function()
+		require("netrw_tree").toggle()
+	end,
+	{
+		silent = true,
+		desc = "Toggle netrw sidebar, keeping tree state",
+	}
+)
 vim.keymap.set(
 	"n", "<leader>E",
 	function()

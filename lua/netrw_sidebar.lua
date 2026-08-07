@@ -136,6 +136,11 @@ function M.new_editing_split(cmd)
 	return created
 end
 
+-- the Lexplore sidebar window, or nil
+function M.window()
+	return sidebar()
+end
+
 function M.focus()
 	local side = sidebar()
 	if not side then
@@ -157,6 +162,12 @@ function M.focus()
 end
 
 function M.setup()
+	vim.g.netrw_liststyle = 3 -- tree view
+	vim.g.netrw_banner = 0 -- hide the top banner
+	vim.g.netrw_winsize = 25 -- fix the left split width
+	vim.g.netrw_browse_split = 4 -- open files in the previous window
+	vim.g.netrw_altfile = 1 -- keep the alternate file correct
+
 	for _, dir in ipairs({ "H", "J", "K", "L" }) do
 		vim.keymap.set("n", "<c-w>" .. dir, function()
 			move(dir)
