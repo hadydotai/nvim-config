@@ -283,6 +283,40 @@ Two implementation notes, both non-obvious:
   `config.settings` when it is constructed, so anything written to them later
   than that changes a table nobody reads.
 
+### Go: K, the workspace, and what a write does
+
+`K` in a Go buffer with nothing attached does not open a float: it runs
+`go doc` in a terminal split, which looks like a broken hover rather than a
+missing server. That is Neovim's own `ftplugin/go.vim` setting `keywordprg` to
+`:GoKeywordPrg`, and `K` falling through to it because no client has mapped
+`K` to hover. Attaching gopls is the whole fix, with nothing to override here:
+Neovim counts an option set by a runtime ftplugin as still default and maps
+`K` over it. `:GoKeywordPrg` still runs `go doc` when you want it.
+
+The root is the `go.work` if there is one, and only then the `go.mod`. A Go
+workspace is several modules gopls is meant to hold at once; rooted at one of
+them the others are just directories to it. Both are ahead of `.git`.
+
+Writing a Go file does two things before it hits disk. gopls organizes the
+imports, which is `source.organizeImports`: a code action rather than
+formatting, because that is where LSP puts it, and it both drops what is
+unused and adds what is missing the way `goimports` does. Go makes an unused
+import a compile error, so without that every write leaves work to do by hand.
+Then the buffer is formatted, which for gopls is `gofmt`. Both are synchronous:
+the write is already under way, and an edit arriving after it would be applied
+to a buffer that had already gone to disk. This is the only place in this
+configuration where saving rewrites the buffer, and it is scoped to the
+buffers gopls attached to.
+
+`staticcheck` is on, which is the same trade as clippy for Rust: more said
+about the code than the compiler alone would say, by a tool that comes with
+the server rather than one that might not be installed.
+
+`:Deps install` builds gopls with `GOBIN` pointed at `.data/`, not with a
+plain `go install`. That would put it in `$GOPATH/bin`, which is not on `$PATH`
+on a machine that was never set up for Go development, and a language server
+Neovim cannot see is the same as one that is not installed.
+
 ### Rust: the workspace, not the crate
 
 The mirror image of the decision above. Python roots at the package because

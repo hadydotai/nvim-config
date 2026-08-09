@@ -8,7 +8,7 @@ local M = {}
 
 -- Named here rather than passed inline so lspstatus.lua can tell which servers
 -- were meant to attach to a buffer, and mark the ones that did not.
-M.servers = { "lua_ls", "pylsp", "tsgo", "rust_analyzer" }
+M.servers = { "lua_ls", "pylsp", "tsgo", "gopls", "rust_analyzer" }
 
 -- The directory nvim was started in, read here because init.lua requires this
 -- before anything has had the chance to :cd. lsp/pylsp.lua treats it as the

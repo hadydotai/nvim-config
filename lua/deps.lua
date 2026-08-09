@@ -7,7 +7,8 @@
 --            OS package manager and generally want sudo, so the command differs
 --            per platform and we cannot keep them inside the config directory.
 --
---   local    tree-sitter, lua-language-server, pylsp, tsgo, rust-analyzer.
+--   local    tree-sitter, lua-language-server, pylsp, tsgo, gopls,
+--            rust-analyzer.
 --            These are ours, not the system's, so they are fetched straight
 --            from upstream into the config directory (see paths.lua) with no
 --            sudo and no package manager. That means one recipe for every
@@ -84,16 +85,19 @@ local SYSTEM = {
 		build = "xcode-select --install || true",
 		node = "brew install node",
 		python = "brew install python",
+		go = "brew install go",
 	},
 	debian = {
 		build = "sudo apt-get update && sudo apt-get install -y build-essential git curl",
 		node = "sudo apt-get install -y nodejs npm",
 		python = "sudo apt-get install -y python3 python3-venv",
+		go = "sudo apt-get install -y golang-go",
 	},
 	arch = {
 		build = "sudo pacman -S --needed --noconfirm base-devel git curl",
 		node = "sudo pacman -S --needed --noconfirm nodejs npm",
 		python = "sudo pacman -S --needed --noconfirm python",
+		go = "sudo pacman -S --needed --noconfirm go",
 	},
 }
 
@@ -141,6 +145,15 @@ local function tsgo_cmd()
 	return ("mkdir -p %s/node && npm install --silent --prefix %s/node @typescript/native-preview"):format(DATA, DATA)
 end
 
+--- GOBIN rather than a plain `go install`, which would put it in $GOPATH/bin.
+--- That directory is not on $PATH on a machine that has not been set up for Go
+--- development, and a language server nvim cannot see is the same as one that
+--- is not installed. Pointed here it lands beside the others, and paths.lua has
+--- already put this directory on the PATH nvim runs things with.
+local function gopls_cmd()
+	return ("mkdir -p %s && GOBIN=%s go install golang.org/x/tools/gopls@latest"):format(BIN, BIN)
+end
+
 --- The one local dependency that does not land in .data/, because rust-analyzer
 --- on its own is not much use: it needs cargo to read the project and the
 --- rust-src component to say anything at all about the standard library, and
@@ -168,10 +181,19 @@ local DEPS = {
 	{ bin = "curl", why = "downloads parsers and language servers", system = "build" },
 	{ bin = "npm", why = "installs the typescript language server", system = "node" },
 	{ bin = "python3", why = "runs the python language server", system = "python" },
+	-- `go version`, not `go --version`: the go tools spell it as a subcommand and
+	-- exit 2 on the flag, which the probe below would read as a missing tool.
+	{
+		bin = "go",
+		why = "builds the go language server, and gopls reads the project with it",
+		system = "go",
+		probe = "version",
+	},
 	{ bin = "tree-sitter", why = "builds treesitter parsers", get = tree_sitter_cmd },
 	{ bin = "lua-language-server", why = "lua language server", get = lua_ls_cmd },
 	{ bin = "pylsp", why = "python language server", get = pylsp_cmd, after = "python3" },
 	{ bin = "tsgo", why = "typescript language server", get = tsgo_cmd, after = "npm" },
+	{ bin = "gopls", why = "go language server", get = gopls_cmd, after = "go", probe = "version" },
 	{ bin = "rust-analyzer", why = "rust language server", get = rust_analyzer_cmd },
 }
 
@@ -216,7 +238,7 @@ function M.check(done)
 			results[dep.bin] = false
 			finish()
 		else
-			vim.system({ dep.bin, "--version" }, { text = true, timeout = 10000 }, function(out)
+			vim.system({ dep.bin, dep.probe or "--version" }, { text = true, timeout = 10000 }, function(out)
 				results[dep.bin] = out.code == 0
 				finish()
 			end)
