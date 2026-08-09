@@ -17,7 +17,6 @@ M.servers = { "lua_ls", "pylsp", "tsgo", "rust_analyzer" }
 M.start_dir = vim.fs.normalize(vim.fn.getcwd())
 
 vim.lsp.enable(M.servers)
-vim.diagnostic.config({ virtual_text = true })
 
 vim.api.nvim_create_autocmd("LspAttach", {
 	callback = function(ev)

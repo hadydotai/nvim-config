@@ -19,6 +19,7 @@ covers the things that need explaining rather than listing.
 | `lua/picker.lua`     | the modal filterable dialog `<leader>f/b/s/h` all use |
 | `lua/win_pick.lua`   | "which window should this open in", the outline overlay |
 | `lua/pairs.lua`      | auto-closing brackets, quotes and docstring fences   |
+| `lua/diagnostics.lua` | the quickfix list of them, and the full text of one |
 | `lua/netrw_*.lua`    | the file tree: pinned sidebar, split picking, `%`    |
 | `lsp/*.lua`          | one file per language server                        |
 | `.data/ .state/ .cache/` | generated, gitignored: plugins, parsers, undo, logs |
@@ -109,6 +110,9 @@ alone. The full set is in `<leader>h`; the ones worth knowing up front:
 | `<C-s>`     | signature help, in insert mode                            |
 | `<leader>s` | symbols in this buffer, as a dialog (`gO` is the same list in the quickfix list) |
 | `<leader>S` | symbols across the workspace, the server matching as you type |
+| `<leader>d` / `<leader>D` | next / previous diagnostic                  |
+| `<leader>q` / `<leader>Q` | diagnostics in the quickfix list, this buffer / all of them |
+| `<C-w>d`    | the diagnostics on this line in full, in a float          |
 
 `gd` is the one addition, and only because plain `gd` is an older Vim key that
 means something else: "go to local declaration", a backwards keyword search
@@ -137,6 +141,41 @@ has the `pylsp_document_symbols` hook, and the request comes back `-32601
 Method Not Found`. lua_ls and tsgo both answer it. Getting it for Python means
 a different server (pyright, basedpyright), which is a trade against the venv
 handling below.
+
+### Diagnostics
+
+`<leader>q` puts this buffer's diagnostics in the quickfix list, `<leader>Q`
+every buffer's, as far as the servers have looked. While that list is on
+screen it is kept current, so fixing something takes the row away instead of
+leaving one that jumps to a line where nothing is wrong any more. Only a list
+this configuration put there is ever rewritten, recognised by its title: a
+`:grep` you ran since is not ours to overwrite.
+
+A quickfix line is one line, and a diagnostic frequently is not. rustc writes
+several and hangs the locations it refers to off the side of them, clippy puts
+the address of the lint in the message, pylsp will hand over a paragraph.
+Flattened into the list, all of that runs off the right edge with nothing to
+scroll. So the list carries the first line, marked `...` when there was more,
+and ends with the source and the code, which is the part you go and search
+for:
+
+```
+src/lib.rs|8 col 5-14 error| cannot borrow `v` as mutable ... [rustc E0502]
+```
+
+The rest is a keypress away, from either side:
+
+- `<C-w>d` in the code, which is Neovim's own mapping, shows every diagnostic
+  on the line in full, each with the locations it points at. Press it again
+  and the float takes focus so it can be scrolled, `q` closes it, and `gf` on
+  one of those locations jumps there. That is the same float `K` gives for
+  hover, and it behaves the same way.
+- `K` in the quickfix window does the same for the entry under the cursor,
+  looked up by the buffer and line the entry points at rather than by where
+  the cursor is, which is in the quickfix window and knows nothing. On a list
+  that is not diagnostics, or an entry whose diagnostic has since been fixed,
+  it falls back to unfolding the entry's own text, which is the same fix for a
+  `:grep` hit that runs off the edge.
 
 ### Backslashes in the hover float
 
