@@ -17,3 +17,4 @@ require("symbols")
 require("diagnostics") -- after keymap.lua: mapleader has to be set before <leader>q
 require("lspstatus").setup()
 require("statusline")
+require("title")

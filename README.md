@@ -21,6 +21,7 @@ covers the things that need explaining rather than listing.
 | `lua/pairs.lua`      | auto-closing brackets, quotes and docstring fences   |
 | `lua/diagnostics.lua` | the quickfix list of them, and the full text of one |
 | `lua/netrw_*.lua`    | the file tree: pinned sidebar, split picking, `%`    |
+| `lua/title.lua`      | the terminal's own title: the file, then the project |
 | `lsp/*.lua`          | one file per language server                        |
 | `.data/ .state/ .cache/` | generated, gitignored: plugins, parsers, undo, logs |
 
@@ -114,6 +115,27 @@ one that gets a yank over SSH back to the terminal you are sitting at. That is
 deliberate upstream (it is slow and can prompt), and it is a `&clipboard ==# ''`
 test, so it is this line that costs it, not the machine. Opting back in is
 `vim.g.clipboard = "osc52"`, which skips the guard.
+
+## Terminal title
+
+`statusline.lua - nvim`, and `statusline.lua + - nvim` with unwritten changes.
+
+The file comes before the project because a terminal tab bar truncates from the
+right and gets narrow as soon as there are a few tabs open, so the half that
+tells two of them apart has to come before the half they have in common. The
+statusline already says everything else, and is on screen; the title is read
+from a tab you are *not* looking at, which is what the two things are for.
+
+The project is the checkout nvim is sitting in, worked out once rather than per
+buffer, because git answers `rev-parse` against the process's directory and
+every buffer would get the same answer anyway. `:cd` recomputes it. Outside a
+repository the directory itself is the name.
+
+Buffers that are not a file do not take the title off the one behind them: the
+quickfix list, a terminal and the picker's floats leave it at the project alone,
+so opening `<leader>f` does not make the tab bar flicker. netrw is the exception
+that needs saying, since it calls its buffer `NetrwTreeListing` wherever it is
+pointed; the title shows the directory it is listing instead, as `lua/`.
 
 ## LSP
 
