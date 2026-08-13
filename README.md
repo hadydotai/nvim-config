@@ -92,6 +92,29 @@ side of the cursor:
 Each key is an expr mapping that only reads the current line, so there is no
 state kept between keystrokes to go stale, and undo, macros and `.` all behave.
 
+## Clipboard
+
+`clipboard=unnamedplus`, so the unnamed register *is* the system clipboard.
+`y` and `p` cross the editor boundary with no `"+` prefix, and so do `d`, `c`
+and `x`, which is the cost of it: deleting a line replaces whatever you had
+copied from another application, and `p` over a visual selection leaves the
+clipboard holding the text it just replaced.
+
+`"0` is the way back. It holds the last thing *yanked* and is never written by
+a delete, so `"0p` still pastes what you copied however many `dd`s ago, and
+repeats: pasting over a selection with it does not consume it.
+
+Neovim finds the clipboard tool itself, and on macOS that is `pbcopy`, which is
+in the base system with nothing to install. On Linux it is `wl-copy`/`wl-paste`
+under Wayland and `xsel` or `xclip` under X11, none of which `:Deps` installs;
+without one, yanking is silently local to nvim.
+
+Setting `clipboard` also switches off Neovim's OSC 52 fallback, which is the
+one that gets a yank over SSH back to the terminal you are sitting at. That is
+deliberate upstream (it is slow and can prompt), and it is a `&clipboard ==# ''`
+test, so it is this line that costs it, not the machine. Opting back in is
+`vim.g.clipboard = "osc52"`, which skips the guard.
+
 ## LSP
 
 ### Keys
