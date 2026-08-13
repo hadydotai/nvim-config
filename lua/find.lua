@@ -3,6 +3,7 @@
 --   type     narrow the list, fuzzily, against the whole relative path
 --   <cr>     outline a target window, hjkl to move, <cr> to open there
 --   <s-cr>   open in the window you came from, never the netrw sidebar
+--   <c-.>    edit which .gitignore'd files this repository shows anyway
 --
 -- The same two-key split as netrw's <cr>/<s-cr> and <leader>b's, through the
 -- same overlay, so wherever you pick a file from it lands the same way.
@@ -15,6 +16,7 @@ local M = {}
 
 local picker = require("picker")
 local win_pick = require("win_pick")
+local unignore = require("unignore")
 
 local ignore_patterns = {
 	"node_modules",
@@ -41,7 +43,10 @@ end
 -- real repository is the difference between instant and several seconds; the
 -- glob is the fallback for directories git has never heard of.
 local function scan()
-	if vim.fn.isdirectory(".git") == 1 and vim.fn.executable("git") == 1 then
+	-- unignore.root() asks exactly this: is there a repository here to ask. It
+	-- is defined once, over there, so the listing and the exceptions to it can
+	-- never disagree about which repository they are talking about.
+	if unignore.root() then
 		local out = vim.fn.systemlist({
 			"git",
 			-- otherwise anything non-ASCII comes back octal-escaped and quoted,
@@ -55,9 +60,12 @@ local function scan()
 		})
 		if vim.v.shell_error == 0 then
 			-- --cached still lists files deleted from the worktree
-			return vim.tbl_filter(function(f)
+			local files = vim.tbl_filter(function(f)
 				return f ~= "" and vim.fn.filereadable(f) == 1
 			end, out)
+			-- and back on the end, the ignored ones asked for by name
+			vim.list_extend(files, unignore.files())
+			return files
 		end
 	end
 
@@ -95,6 +103,23 @@ local function columns(path)
 	return { col }
 end
 
+-- Say so in the border when the list is not just what git would tell you, so a
+-- node_modules that turns up in it reads as something you asked for rather than
+-- as the filter having quietly broken. Capped, since the title sets a floor on
+-- how wide the float has to be.
+local function title()
+	local patterns = unignore.text()
+	if patterns == "" then
+		return "Files"
+	end
+	if #patterns > 30 then
+		patterns = patterns:sub(1, 27) .. "..."
+	end
+	return "Files +" .. patterns
+end
+
+local FOOTER = win_pick.FOOTER:gsub("%s+$", "") .. "   <C-.> unignore "
+
 function M.show()
 	local files = scan()
 	if #files == 0 then
@@ -103,14 +128,21 @@ function M.show()
 	end
 
 	picker.open({
-		title = "Files",
+		title = title(),
 		items = files,
 		columns = columns,
 		search = function(path)
 			return path
 		end,
 		fuzzy = true,
-		footer = win_pick.FOOTER,
+		footer = FOOTER,
+		-- reopened rather than refreshed in place: the listing is measured once
+		-- when the dialog opens, and it has just changed underneath it
+		commands = {
+			["<C-.>"] = function()
+				unignore.edit(M.show)
+			end,
+		},
 		-- built here rather than inside the picker, so it still sees the window
 		-- layout as it was before the float took focus
 		actions = win_pick.actions(function(win, path)

@@ -394,6 +394,8 @@ end
 ---   fuzzy    match with matchfuzzypos instead of AND-ed substrings
 ---   footer   right-aligned hint text
 ---   actions  map of lhs to function(item); the list closes before it runs
+---   commands map of lhs to function(); like actions but about the list rather
+---            than a row in it, so it fires with nothing highlighted too
 ---   query    function(text, done); when given, typing re-asks it for the whole
 ---            list instead of narrowing `items`, which stay the first answer
 function M.open(opts)
@@ -525,6 +527,16 @@ function M.open(opts)
 	end
 	if not (opts.actions and opts.actions["<CR>"]) then
 		map({ "i", "n" }, "<CR>", close)
+	end
+
+	-- About the list rather than a row in it, so unlike an action these fire
+	-- with nothing highlighted: the reason to reach for one is frequently that
+	-- what you were looking for is not here.
+	for lhs, run in pairs(opts.commands or {}) do
+		map({ "i", "n" }, lhs, function()
+			close()
+			vim.schedule(run)
+		end)
 	end
 
 	vim.api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {

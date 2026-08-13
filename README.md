@@ -22,6 +22,7 @@ covers the things that need explaining rather than listing.
 | `lua/diagnostics.lua` | the quickfix list of them, and the full text of one |
 | `lua/netrw_*.lua`    | the file tree: pinned sidebar, split picking, `%`    |
 | `lua/title.lua`      | the terminal's own title: the file, then the project |
+| `lua/unignore.lua`   | the `.gitignore`'d files `<leader>f` shows anyway    |
 | `lsp/*.lua`          | one file per language server                        |
 | `.data/ .state/ .cache/` | generated, gitignored: plugins, parsers, undo, logs |
 
@@ -68,6 +69,38 @@ screen a split is made rather than the tree being replaced.
 --exclude-standard` when there is a `.git`, so `.gitignore` is respected and
 `node_modules` is never walked. Outside a repository it falls back to a glob
 with an ignore list.
+
+### Ignored files you want back
+
+Respecting `.gitignore` is right nearly always and wrong for the handful of
+ignored files you actually work with: a generated client, a vendored directory,
+the `.env` you keep editing. `<C-.>` in the `<leader>f` dialog edits the
+exceptions for the repository you are in, comma separated, and remembers them.
+
+The patterns are **git pathspecs**, passed to
+`git ls-files --others --ignored --exclude-standard -- ...` as they are written.
+That is the whole of the matching rule, so they mean here what they would mean
+on a git command line rather than following a second scheme invented for this:
+a bare `dist` matches at any depth, and `*` on its own is therefore "show
+everything ignored", which is the quickest way to find the one file you cannot
+name.
+
+The title says so while it is on, as `Files +dist,.env`, because a
+`node_modules` path appearing in the list should read as something you asked
+for rather than as the filter having quietly broken. Clearing the prompt turns
+it back off.
+
+The list is `.state/nvim/unignore.json`, keyed by repository root, so nothing
+is written into the project and nothing follows the config to a machine where
+those paths would mean nothing. `:find` picks the exceptions up too, since both
+go through the same `scan()`.
+
+Two things this deliberately does not do. It does not merge the ignored files
+in sorted order: they go on the end of the listing, because the fuzzy filter is
+what you actually navigate with and the order it returns is its own. And
+`<C-.>` is the one picker key not listed in `<leader>h`, along with the rest of
+the picker's keys, which are buffer-local to a dialog that does not exist until
+you open it; the footer is where they are advertised.
 
 ## Pairs
 
