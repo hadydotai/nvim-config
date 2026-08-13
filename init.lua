@@ -18,3 +18,4 @@ require("diagnostics") -- after keymap.lua: mapleader has to be set before <lead
 require("lspstatus").setup()
 require("statusline")
 require("title")
+require("markdown")

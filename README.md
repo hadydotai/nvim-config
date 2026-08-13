@@ -22,6 +22,7 @@ covers the things that need explaining rather than listing.
 | `lua/diagnostics.lua` | the quickfix list of them, and the full text of one |
 | `lua/netrw_*.lua`    | the file tree: pinned sidebar, split picking, `%`    |
 | `lua/title.lua`      | the terminal's own title: the file, then the project |
+| `lua/markdown.lua`   | `<leader>p`, markdown read as rendered rather than as source |
 | `lua/unignore.lua`   | the `.gitignore`'d files `<leader>f` shows anyway    |
 | `lsp/*.lua`          | one file per language server                        |
 | `.data/ .state/ .cache/` | generated, gitignored: plugins, parsers, undo, logs |
@@ -125,6 +126,136 @@ side of the cursor:
 
 Each key is an expr mapping that only reads the current line, so there is no
 state kept between keystrokes to go stale, and undo, macros and `.` all behave.
+
+## Markdown
+
+`<leader>p` in a markdown buffer stops the markers being drawn, and again puts
+them back. Not a preview in another window or another program: the same buffer,
+so the cursor keeps its place, the file stays editable, and the colours are the
+colorscheme's rather than some renderer's idea of them.
+
+```
+## Layout                        Layout
+
+- `init.lua` is the **order**    • init.lua is the order
+- see [paths](lua/paths.lua)     • see paths
+
+```lua                             local x = 1
+local x = 1
+```
+```
+
+Most of that is Neovim's, not ours. Its markdown queries already conceal the
+code fences and the language annotation, and markdown_inline's conceal the
+emphasis markers, inline backticks and link brackets, so `conceallevel` is most
+of the feature. `concealcursor` is set to `nc` rather than to everything, so
+the line the cursor is on shows its source again the moment you start editing
+it.
+
+What Neovim leaves alone is headings and list bullets, and `lua/markdown.lua`
+draws those with extmarks. That is not the obvious mechanism and the reason is
+worth writing down, because the query language looks like it should do it. The
+parser is inconsistent about the space after a marker: `atx_hN_marker` stops at
+the last `#`, while a list marker node runs to the end of the space following
+it. So concealing the node whole is wrong in a different direction for each,
+one leaving a stray column and the other closing the gap up into `•item`. The
+query answer is `#offset!`, which is exactly what Neovim's own bullet conceals
+use, and they ship commented out with a note blaming "issues with spaces in the
+list marker nodes". It cannot work: the directive records
+`metadata[capture].offset` and nothing in the treesitter runtime ever reads it
+back. An extmark takes the range it is handed, which is why this is code rather
+than a query file.
+
+### Tables
+
+Tables are drawn: fitted to the window, wrapped inside their columns, and
+aligned.
+
+```
+│ Server        │ Root marker               │ Why that one               │
+├───────────────┼───────────────────────────┼────────────────────────────┤
+│ pylsp         │ pyproject.toml, then      │ Each package brings its    │
+│               │ .git                      │ own interpreter, so the    │
+│               │                           │ root is the package and    │
+│               │                           │ not the checkout.          │
+```
+
+The widths are measured against what a cell will *look* like, not what it says.
+A cell holding `` `init.lua` `` is eleven characters and draws as eight, so
+measuring the source would leave every column after it out by two. That is why
+the parse asks for the injected trees: what `markdown_inline` conceals inside a
+cell is part of how wide that cell comes out. `strdisplaywidth` does the
+measuring, so 日本語 counts as the six columns it occupies rather than the nine
+bytes it takes. `:---`, `---:` and `:---:` are honoured.
+
+Columns are fitted to the window before anything is drawn. The widest column
+gives up one column at a time, so a table of one prose column beside several
+short ones loses width where there is width to lose. Each cell is then wrapped
+inside the width it ended up with, at spaces where there is one, and a row
+becomes as many lines as its tallest cell needs.
+
+### Why a table is drawn as virtual lines
+
+The obvious way to do this is to conceal the source and draw the replacement
+over it. It cannot work, because of a property of `conceal` worth knowing:
+**concealing text hides the characters but does not give back the columns they
+occupied.** The line still wraps where it would have wrapped. Concealing 150
+characters of a 152-character line leaves two characters visible and a line
+that still takes three screen rows to display them.
+
+That is invisible while the thing being concealed is a marker or a run of
+spaces, which is every other use of conceal in this file, and it is why the
+first several attempts at this looked almost right. It stops being invisible
+the moment a whole paragraph has to come out of a cell.
+
+So the source rows are removed from the display outright with `conceal_lines`,
+which is the one that does return the space, and the table is drawn as virtual
+lines. Virtual lines attached to a concealed line are concealed along with it,
+so they hang off the line before the table, or the one after it when the table
+starts the file; a table with neither is left as it was written.
+
+The cost is that a table is drawn flat. A chunk of virtual text carries one
+highlight, not the syntax tree's, so code spans and links inside a cell keep
+their text but lose their colour. Everything outside tables is still the
+buffer's own text and still fully highlighted. Buying the colour back means
+reconstructing per-chunk highlight groups from the tree, which is a good deal
+more machinery than the rest of this file put together.
+
+The other consequence is the cursor. A line taken out of the display is not on
+the screen anywhere, so a cursor sitting on one is a cursor you cannot see:
+`j` through a four row table would be four presses that look like nothing
+happened, followed by one that jumps. So the cursor steps over a drawn table in
+one move, carrying on the way it was already going, and a table is one thing to
+move across because it is one thing to read. Landing on one from a search has
+no direction to carry, so it comes out below.
+
+The corollary is that a table cannot be edited while it is drawn, since the
+cursor will not stay in it. `<leader>p` again and it is ordinary text.
+
+### Heading levels
+
+With the `#` markers hidden, nothing would tell an h1 from an h3. A colorscheme
+usually defines `@markup.heading` and leaves the six numbered groups to fall
+back to it, so every level is drawn identically; catppuccin links the lot to
+`Title`. A terminal cannot make a heading bigger, so the level is carried by
+weight and colour instead, both ends taken from the colorscheme rather than
+written down here: its heading colour, and `Comment`, which is by definition
+the colour it uses for something receding.
+
+Colour alone will not carry six steps, since those two can be close together
+and in catppuccin they are. So h1 and h2 both keep the full heading colour and
+are told apart by an underline, which leaves the whole of the range to separate
+h3 from h6, where bold giving way to italic is the only other thing left to
+vary.
+
+### What it does not do
+
+Ordered lists keep their numbers, `1.` being what it renders as anyway.
+Paragraphs outside tables are not rewrapped to a measure; `linebreak` only
+stops a wrap falling mid-word. A single word longer than its column is cut
+rather than allowed to run past the edge, which is the one place this loses
+something the source said. A file that is nothing but a table, with no line
+above or below it to hang the drawing on, is left as it was written.
 
 ## Clipboard
 
