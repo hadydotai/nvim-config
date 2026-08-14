@@ -318,6 +318,14 @@ Agents are children of this Neovim, so quitting ends them. A tmux pane would
 survive and this does not; if that matters, the agent is a normal CLI and
 running it in a terminal remains the way to outlive the editor.
 
+There is no scrollback in an agent's terminal. Claude and grok draw on the
+alternate screen, the one a full-screen program gets so that leaving it puts
+your shell back exactly as it was, and nothing drawn there is ever added to a
+terminal buffer's history - by any terminal, not just this one. `<C-\><C-n>`
+still gets you to normal mode, but the buffer holds only what is on screen, and
+scrolling back through the conversation is the agent's own job. Codex draws
+inline, so its terminal does keep a history you can scroll.
+
 ## Pairs
 
 `( [ {` insert their closing half, `) ] }` step over one that is already there
