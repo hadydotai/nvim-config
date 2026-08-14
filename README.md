@@ -25,6 +25,13 @@ covers the things that need explaining rather than listing.
 | `lua/markdown.lua`   | `<leader>p`, markdown read as rendered rather than as source |
 | `lua/unignore.lua`   | the `.gitignore`'d files `<leader>f` shows anyway    |
 | `lua/grep.lua`       | `<leader>g`, every matching line in the project      |
+| `lua/agent.lua`      | coding agents: what is running and what it is doing  |
+| `lua/agent_cli.lua`  | what claude, codex and grok each need to be wired up |
+| `lua/agent_spawn.lua` | `<leader>aa`, starting one and feeding it context   |
+| `lua/agent_dash.lua` | `<leader>ad`, the dashboard buffer                   |
+| `lua/agent_sidebar.lua` | `<leader>ae`, the same thing as a column          |
+| `lua/agent_worktree.lua` | a git worktree per agent, so two cannot collide |
+| `lua/agent_context.lua` | the file, line or selection an agent is asked about |
 | `lsp/*.lua`          | one file per language server                        |
 | `.data/ .state/ .cache/` | generated, gitignored: plugins, parsers, undo, logs |
 
@@ -150,6 +157,88 @@ Ripgrep respects `.gitignore` itself, so the listing agrees with `<leader>f`
 about what is in the project. It does not know about the `<C-.>` exceptions
 above, which is a `<leader>f` thing: git pathspecs and ripgrep globs are close
 enough to look interchangeable and different enough to be wrong quietly.
+
+## Agents
+
+`<leader>aa` starts a coding agent - claude, codex or grok, whichever you have -
+on the file you are in or the lines you have selected, and `<leader>ad` shows
+every one of them and what it is doing.
+
+The agent runs its own terminal UI in a hidden buffer, so its permission
+prompts, slash commands and rendering are its own and work exactly as they do
+in a terminal. What this adds is knowing, without going to look, which agent is
+working, which is waiting on you and which has finished.
+
+| key | |
+| --- | --- |
+| `<leader>aa` | start one, on this file or the selection |
+| `<leader>ac` | send this file, line, selection or its diagnostics to one already running |
+| `<leader>ad` | the dashboard |
+| `<leader>ae` | the sidebar, a column narrow enough to leave open |
+
+On the dashboard, `<CR>` opens that agent's terminal through the same window
+overlay `<leader>f` uses, `i` types a line to it without leaving, `a` starts
+another, `s` stops one and `x` forgets one that has exited.
+
+### Getting to one
+
+Three ways in, depending on what you are doing:
+
+- `<CR>` on a row of the dashboard or the sidebar, which puts its terminal in a
+  window you pick and drops you into insert mode ready to type
+- `<leader>b`, because an agent's terminal is an ordinary listed buffer named
+  after the run, so the buffer list finds it like anything else
+- `<leader>ac` or `i` on the dashboard, to say something to an agent without
+  opening it at all, which is usually what you want mid-edit
+
+Inside one you are in a terminal, so `<C-\><C-n>` leaves insert mode. `<Esc>` is
+deliberately not mapped: all three agents use it for their own menus, and taking
+it would break the interface it is meant to make easier to reach.
+
+### How it knows
+
+From the agent, not by watching its output. All three take the same shape of
+hook config, which is Claude Code's - grok documents the compatibility and
+reads `~/.claude/settings.json` for it - so one script serves all three, and
+each fires it on submitting a prompt, finishing a tool, asking permission and
+ending a turn.
+
+Nothing is installed into `~/.claude`, `~/.codex` or `~/.grok`. Claude takes a
+settings file as a flag. The other two only read a home directory, so they get
+one: a directory that symlinks the real home entry by entry, with the hook file
+the only thing that is ours. Credentials, sessions, skills and memory stay where
+they are and keep working from a normal terminal.
+
+The hook writes a small file into an inbox directory rather than calling back
+into Neovim, because a hook that blocks blocks the agent. Writing a file cannot
+fail slowly; an RPC into a busy Neovim can, and the agent would sit on it until
+its own hook timeout gave up.
+
+Codex will not run a hook it has not been told to trust and asks once, in its
+own dialog, the first time you start it from here. Press `t`. Its answer is
+remembered, which is the reason its mirrored home is kept rather than built per
+run.
+
+An agent that fires no hooks is still tracked as running or exited, because the
+process is Neovim's own child. `:Agents check` says which are wired.
+
+### A worktree each
+
+An agent gets a git worktree of its own, on a branch named after what you asked
+it, under `.data/` where it is gitignored. `<C-w>` in the dialog runs it in the
+current checkout instead.
+
+The isolation is not fussiness. Two agents editing one checkout do not take
+turns and neither knows the other exists, so the second overwrites the first
+and the diff you read afterwards is neither of them. Separate worktrees also
+mean the diff column on the dashboard is that agent's work and nothing else,
+which is why it is only shown for a run that has one.
+
+### What it does not do
+
+Agents are children of this Neovim, so quitting ends them. A tmux pane would
+survive and this does not; if that matters, the agent is a normal CLI and
+running it in a terminal remains the way to outlive the editor.
 
 ## Pairs
 

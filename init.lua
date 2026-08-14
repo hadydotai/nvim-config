@@ -13,6 +13,10 @@ require("keymap")
 require("pairs")
 require("find")
 require("grep")
+require("agent").setup() -- coding agents: spawn, track, talk to
+require("agent_spawn")
+require("agent_dash")
+require("agent_sidebar")
 require("buffers")
 require("symbols")
 require("diagnostics") -- after keymap.lua: mapleader has to be set before <leader>q
