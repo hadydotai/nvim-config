@@ -45,7 +45,19 @@ local function field(text, key)
 	return text:match("\n" .. key .. '="?([^"\n]+)') or text:match("^" .. key .. '="?([^"\n]+)')
 end
 
---- "mac", "debian" (also Ubuntu and WSL Ubuntu), "arch" (also CachyOS), or nil.
+-- Matched in order, so a distribution naming several of these in ID_LIKE gets
+-- the first that fits rather than whichever the table happened to iterate to.
+local FAMILIES = {
+	{ "arch", { "arch" } },
+	{ "debian", { "debian", "ubuntu" } },
+	{ "fedora", { "fedora", "rhel", "centos" } },
+	{ "suse", { "suse" } },
+	{ "alpine", { "alpine" } },
+}
+
+--- "mac", or the Linux family: "debian" (also Ubuntu and WSL Ubuntu), "arch"
+--- (also CachyOS), "fedora" (also RHEL and CentOS), "suse", "alpine". nil when
+--- it is something we have no recipes for.
 --- Takes its inputs as arguments so the mapping can be tested from any machine;
 --- both default to this one.
 --- @param sysname? string value of uname -s
@@ -62,11 +74,12 @@ function M.platform(sysname, release)
 	-- reports ID=cachyos ID_LIKE=arch, Ubuntu reports ID=ubuntu ID_LIKE=debian.
 	release = release or read_os_release()
 	local ids = (field(release, "ID") or "") .. " " .. (field(release, "ID_LIKE") or "")
-	if ids:find("arch", 1, true) then
-		return "arch"
-	end
-	if ids:find("debian", 1, true) or ids:find("ubuntu", 1, true) then
-		return "debian"
+	for _, family in ipairs(FAMILIES) do
+		for _, id in ipairs(family[2]) do
+			if ids:find(id, 1, true) then
+				return family[1]
+			end
+		end
 	end
 	return nil
 end
@@ -80,12 +93,29 @@ end
 -- recipes
 --------------------------------------------------------------------------- --
 
+-- Every mac recipe below goes through Homebrew, which a mac does not come
+-- with. Without this the first thing :Deps install does on a new machine is
+-- print "brew: command not found" three times and call it a day. The second
+-- line is not redundant: the installer does not put brew on the PATH of the
+-- shell that ran it, so a fresh install is still invisible to the next command.
+local BREW = table.concat({
+	'command -v brew >/dev/null 2>&1 ||'
+		.. ' /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/brew/HEAD/install.sh)"',
+	'command -v brew >/dev/null 2>&1 ||'
+		.. ' eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv)"',
+}, " && ")
+
+local function brew(package)
+	return BREW .. " && brew install " .. package
+end
+
 local SYSTEM = {
 	mac = {
+		-- the compiler comes from the command line tools, not from Homebrew
 		build = "xcode-select --install || true",
-		node = "brew install node",
-		python = "brew install python",
-		go = "brew install go",
+		node = brew("node"),
+		python = brew("python"),
+		go = brew("go"),
 	},
 	debian = {
 		build = "sudo apt-get update && sudo apt-get install -y build-essential git curl",
@@ -98,6 +128,24 @@ local SYSTEM = {
 		node = "sudo pacman -S --needed --noconfirm nodejs npm",
 		python = "sudo pacman -S --needed --noconfirm python",
 		go = "sudo pacman -S --needed --noconfirm go",
+	},
+	fedora = {
+		build = "sudo dnf install -y --setopt=install_weak_deps=False gcc gcc-c++ make git curl",
+		node = "sudo dnf install -y nodejs npm",
+		python = "sudo dnf install -y python3 python3-pip",
+		go = "sudo dnf install -y golang",
+	},
+	suse = {
+		build = "sudo zypper install -y gcc gcc-c++ make git curl",
+		node = "sudo zypper install -y nodejs npm",
+		python = "sudo zypper install -y python3 python3-pip",
+		go = "sudo zypper install -y go",
+	},
+	alpine = {
+		build = "sudo apk add --no-cache build-base git curl",
+		node = "sudo apk add --no-cache nodejs npm",
+		python = "sudo apk add --no-cache python3 py3-pip",
+		go = "sudo apk add --no-cache go",
 	},
 }
 
@@ -361,6 +409,36 @@ local function show()
 	end
 end
 
+--- Missing dependencies in an order that can actually be installed: a thing
+--- named in another's `after` goes first. The list order already happens to
+--- satisfy this, which is exactly why it is worth doing on purpose, since
+--- nothing would notice the day it stopped.
+local function ordered(gone)
+	local pending, out = {}, {}
+	for _, dep in ipairs(gone) do
+		pending[dep.bin] = true
+	end
+	local left = vim.deepcopy(gone)
+	while #left > 0 do
+		local moved = false
+		for i, dep in ipairs(left) do
+			if not (dep.after and pending[dep.after]) then
+				out[#out + 1] = dep
+				pending[dep.bin] = nil
+				table.remove(left, i)
+				moved = true
+				break
+			end
+		end
+		if not moved then
+			-- a cycle, which is a bug in the list rather than in the machine
+			vim.list_extend(out, left)
+			break
+		end
+	end
+	return out
+end
+
 --- Install everything missing, in a terminal so sudo and npm can talk to you.
 local function install()
 	local gone = M.missing()
@@ -369,13 +447,22 @@ local function install()
 		return
 	end
 
-	local script, skipped = {}, {}
-	for _, dep in ipairs(gone) do
+	local script, skipped = { "failed=" }, {}
+	for _, dep in ipairs(ordered(gone)) do
 		if not dep.command then
 			skipped[#skipped + 1] = dep.bin
 		else
-			script[#script + 1] = ("echo '==> %s'"):format(dep.bin)
-			script[#script + 1] = dep.command
+			script[#script + 1] = ("echo; echo '==> %s'"):format(dep.bin)
+			-- Each recipe is one && chain, so `if` around it is enough to tell a
+			-- step that worked from one that did not. Without this a failure
+			-- scrolls past inside a wall of package manager output and the run
+			-- still ends by announcing it is done.
+			script[#script + 1] = ("if %s; then echo '<== %s ok'; else echo '<== %s FAILED'; failed=\"$failed %s\"; fi"):format(
+				dep.command,
+				dep.bin,
+				dep.bin,
+				dep.bin
+			)
 		end
 	end
 
@@ -386,13 +473,21 @@ local function install()
 			vim.log.levels.WARN
 		)
 	end
-	if #script == 0 then
+	if #script == 1 then
 		return
 	end
 
-	script[#script + 1] = "echo '==> done, restart nvim'"
+	script[#script + 1] = 'echo; if [ -n "$failed" ]; then echo "==> failed:$failed"; else echo "==> all installed"; fi'
 	vim.cmd("botright new")
-	vim.fn.jobstart({ "sh", "-c", table.concat(script, "\n") }, { term = true })
+	vim.fn.jobstart({ "sh", "-c", table.concat(script, "\n") }, {
+		term = true,
+		-- What was probed is what was true before any of this ran, and it is
+		-- cached for the session, so :Deps would go on reporting the old answer
+		-- and the only advice left would be to restart nvim.
+		on_exit = function()
+			probed = nil
+		end,
+	})
 	vim.cmd("startinsert")
 end
 

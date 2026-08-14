@@ -38,6 +38,24 @@ packages (compiler, git, curl, node, python) come from the OS package manager
 and differ per platform; the language servers and the tree-sitter CLI are
 fetched straight from upstream into `.data/` with no sudo.
 
+The platform is the family rather than the distribution, taken from `ID` and
+then `ID_LIKE` in `/etc/os-release`, which is what makes derivatives work
+without naming every one: mac, debian (also Ubuntu and WSL), arch (also
+CachyOS), fedora (also RHEL and Rocky), suse, alpine. Somewhere with no recipe
+is told so by name rather than quietly having a subset installed.
+
+macOS is the one that needs bootstrapping, since every recipe for it goes
+through Homebrew and a mac does not come with Homebrew. It is installed first
+if missing, and then put on the `PATH` of the shell that is about to use it,
+which the installer does not do for you.
+
+Each step reports whether it worked, and the run ends by naming what failed
+rather than announcing it is done. Anything with an `after` is installed after
+the thing it names, so a language server is never built before its language.
+When the run finishes, what was probed at startup is thrown away and asked
+again, so `:Deps` tells you what is true now rather than what was true before
+you installed anything.
+
 rust-analyzer is the one that does not land in `.data/`. It is no use without
 cargo to read the project and the `rust-src` component to know the standard
 library, and rustup is what holds those at one version, including whatever
