@@ -17,8 +17,18 @@
 -- keep working from a normal terminal. Only the hook file is ours. Nothing is
 -- written to ~/.claude, ~/.codex or ~/.grok.
 --
+-- Two other things differ per CLI and so are decided here:
+--
+--   the screen   codex and grok take --no-alt-screen, so they draw inline and
+--                what is on screen when they exit stays in the buffer. claude
+--                has no such flag and takes over the alternate screen, where
+--                nothing survives it at all. `inline` says which. Neither is
+--                scrollback: all three repaint in place rather than letting
+--                lines scroll off, so the buffer never holds more than a
+--                screen of the conversation whatever we pass
+--
 -- Verified against claude 2.x, codex 0.147 and grok as installed: hooks fire,
--- and grok's auth survives the mirror.
+-- grok's auth survives the mirror, and both --no-alt-screen flags exist.
 
 local M = {}
 
@@ -198,6 +208,9 @@ local CLIS = {
 		name = "claude",
 		label = "Claude Code",
 		bin = "claude",
+		-- No way to leave the alternate screen, so its terminal buffer keeps
+		-- nothing at all once it exits. See `inline`.
+		inline = false,
 		-- A flag, so there is no home to mirror and nothing installed at all.
 		prepare = function(self)
 			local path = DATA .. "/claude-settings.json"
@@ -227,7 +240,8 @@ local CLIS = {
 		-- Codex will not run a hook it has not been told to trust, and asks
 		-- once per home. That is the reason this mirror is kept rather than
 		-- built per run: trust is recorded here, so you answer it once.
-		note = "codex asks you to trust these hooks the first time. Press t in its dialog; it is remembered.",
+		note = "codex asks you to trust these hooks the first time it starts. Choose 'Trust all and continue'; it is remembered.",
+		inline = true,
 		prepare = function(self)
 			local home = DATA .. "/codex-home"
 			local ok, err = mirror(vim.env.HOME .. "/.codex", home, { "hooks.json" })
@@ -245,6 +259,7 @@ local CLIS = {
 		end,
 		argv = function(self, run)
 			local argv = { self.bin }
+			argv[#argv + 1] = "--no-alt-screen"
 			if run.prompt then
 				argv[#argv + 1] = run.prompt
 			end
@@ -256,6 +271,7 @@ local CLIS = {
 		name = "grok",
 		label = "Grok",
 		bin = "grok",
+		inline = true,
 		-- Grok has no settings flag, so the same mirror trick, with the hooks
 		-- appended to a copy of config.toml. Its own config is read rather
 		-- than linked so the copy keeps whatever you have set.
@@ -285,6 +301,7 @@ local CLIS = {
 		end,
 		argv = function(self, run)
 			local argv = { self.bin }
+			argv[#argv + 1] = "--no-alt-screen"
 			if run.prompt then
 				argv[#argv + 1] = run.prompt
 			end

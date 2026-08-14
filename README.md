@@ -181,8 +181,9 @@ working, which is waiting on you and which has finished.
 
 On the dashboard, `<CR>` opens that agent's terminal through the same window
 overlay `<leader>f` uses, `i` types a line to it without leaving, `a` starts
-another, `s` stops one and `x` drops one: an agent that has exited is forgotten,
-a worktree is removed. The keys are in the window bar, so the list stays a list.
+another, `s` stops one and `x` drops one: an agent that has exited is
+forgotten, a worktree is removed. The keys are in the window bar, so the list
+stays a list.
 
 ### Getting to one
 
@@ -318,13 +319,16 @@ Agents are children of this Neovim, so quitting ends them. A tmux pane would
 survive and this does not; if that matters, the agent is a normal CLI and
 running it in a terminal remains the way to outlive the editor.
 
-There is no scrollback in an agent's terminal. Claude and grok draw on the
-alternate screen, the one a full-screen program gets so that leaving it puts
-your shell back exactly as it was, and nothing drawn there is ever added to a
-terminal buffer's history - by any terminal, not just this one. `<C-\><C-n>`
-still gets you to normal mode, but the buffer holds only what is on screen, and
-scrolling back through the conversation is the agent's own job. Codex draws
-inline, so its terminal does keep a history you can scroll.
+There is no scrollback worth the name in an agent's terminal, and it is not a
+setting you are missing. Codex and grok are started with `--no-alt-screen`, so
+they draw inline and what is on screen when they exit stays in the buffer;
+claude has no such flag and takes over the alternate screen, where by definition
+nothing is kept. But all three are full-screen programs that repaint in place
+rather than letting lines scroll off, so none of them fills a terminal buffer's
+history the way a command that prints and stops would. Measured: 200 lines of
+`seq` land in the buffer as 201 lines, and an agent's answer of the same length
+leaves it at exactly one screen. `<C-\><C-n>` gets you to normal mode either
+way, but paging back through the conversation is the agent's own job.
 
 ## Pairs
 
