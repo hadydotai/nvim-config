@@ -32,6 +32,7 @@ covers the things that need explaining rather than listing.
 | `lua/agent_sidebar.lua` | `<leader>ae`, the same thing as a column          |
 | `lua/agent_worktree.lua` | a git worktree per agent, so two cannot collide |
 | `lua/agent_project.lua` | `<leader>aw`, what a new worktree needs to build |
+| `lua/agent_tree.lua` | picking that from the project tree rather than typing it |
 | `lua/agent_context.lua` | the file, line or selection an agent is asked about |
 | `lsp/*.lua`          | one file per language server                        |
 | `.data/ .state/ .cache/` | generated, gitignored: plugins, parsers, undo, logs |
@@ -256,17 +257,27 @@ that the project does not run.
 
 | | |
 | --- | --- |
-| `a` | add to the list the cursor is in |
+| `a` | pick from the project tree |
+| `A` | add by typing a pattern, for a glob no single file stands for |
 | `e` | edit, `d` delete, `<Space>` turn one off without losing it |
 | `s` | apply the setup to every worktree this project already has |
 | `g` | keep this as the starting point for projects with no setup yet |
 
 Copy is for small files that should differ per worktree, symlink for large ones
-that should not be duplicated, which is the only reason both exist. Patterns are
-globs, and completion offers exactly the files git is ignoring, because that is
-almost exactly the list worth copying. The commands run after creation are
-asynchronous: an install takes minutes and the agent should be starting while it
-happens, not afterwards.
+that should not be duplicated, which is the only reason both exist. The commands
+run after creation are asynchronous: an install takes minutes and the agent
+should be starting while it happens, not afterwards.
+
+`a` opens the project as a tree, where `c` marks something to copy, `s` to
+symlink and `<Space>` cycles. It opens showing only the gitignored files and the
+directories that lead to them, because those are the only things a fresh
+checkout is actually without, and copying a tracked file into a worktree that
+already has it does nothing. `.` shows the rest of the project when you want it.
+
+What gets stored is still a glob, so `A` remains for the ones no single file
+stands for, like `*.local`. Those show in the lists but not as marks in the
+tree: a glob has no one place in it, and pretending one of its matches was the
+entry would make unmarking delete a pattern you never picked there.
 
 Nothing is overwritten. Re-running the setup fills in what a worktree is missing
 rather than replacing what is there, since a worktree that has been worked in

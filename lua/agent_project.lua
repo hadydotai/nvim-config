@@ -308,9 +308,8 @@ local function build()
 	local n = #require("agent_worktree").list(state.repo, state.config)
 	add(("  %d worktree%s for this project"):format(n, n == 1 and "" or "s"), { { 0, -1, "AgentHint" } })
 	add("")
-	add("  a add   e edit   d delete   <Space> on/off   s sync all   g save as defaults   q close", {
-		{ 0, -1, "AgentHint" },
-	})
+	add("  a pick from the tree   A type a pattern   e edit   d delete", { { 0, -1, "AgentHint" } })
+	add("  <Space> on/off   s sync all   g save as defaults   q close", { { 0, -1, "AgentHint" } })
 
 	return lines, spans, rows
 end
@@ -379,6 +378,18 @@ local function keys(into)
 				save()
 			end)
 		end
+		-- Walking the project beats describing it, so a and s open the tree
+		-- for the two lists that name files. Commands have nowhere to point at.
+		if section_at_cursor() == "after" then
+			return ask("Run after creating a worktree: ", "", "shellcmd", function(text)
+				table.insert(state.config.after, { what = text, on = true })
+				save()
+			end)
+		end
+		require("agent_tree").show(state.repo, state.config, save)
+	end, "Pick files from the project tree")
+
+	map("A", function()
 		local key = section_at_cursor()
 		if not key then
 			return
@@ -388,7 +399,7 @@ local function keys(into)
 			table.insert(state.config[key], { what = text, on = true })
 			save()
 		end)
-	end, "Add an entry")
+	end, "Add an entry by typing a pattern")
 
 	map("e", function()
 		local row = at_cursor()
