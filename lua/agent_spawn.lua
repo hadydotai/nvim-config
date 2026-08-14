@@ -37,22 +37,101 @@ local function name_for(question, cli_name)
 	return slug
 end
 
---- Ask the question, then start. Split out because both the dialog and a
---- direct call want it.
+--- Branches and tags, for completing where a worktree is cut from and for
+--- noticing that the name you are typing is one that already exists.
+function _G._agent_refs(lead)
+	local root = worktree.repo()
+	if not root then
+		return {}
+	end
+	local out = vim.system({
+		"git",
+		"for-each-ref",
+		"--format=%(refname:short)",
+		"refs/heads",
+		"refs/remotes",
+		"refs/tags",
+	}, { cwd = root, text = true }):wait()
+
+	local seen, refs = {}, {}
+	for line in (out.stdout or ""):gmatch("[^\n]+") do
+		-- The agent/ branches are ours, and offering one back as a base is a
+		-- way to build a worktree on top of another agent's unreviewed work.
+		if not seen[line] and not line:match("^agent/") then
+			seen[line] = true
+			refs[#refs + 1] = line
+		end
+	end
+	table.sort(refs)
+	return vim.tbl_filter(function(ref)
+		return ref:find(lead, 1, true) == 1
+	end, refs)
+end
+
+--- Names already taken by a worktree of this project, so completing one is how
+--- you send a second agent into an existing worktree on purpose.
+function _G._agent_names(lead)
+	local root = worktree.repo()
+	local names = {}
+	for _, dir in ipairs(root and worktree.list(root) or {}) do
+		names[#names + 1] = vim.fn.fnamemodify(dir, ":t")
+	end
+	table.sort(names)
+	return vim.tbl_filter(function(name)
+		return name:find(lead, 1, true) == 1
+	end, names)
+end
+
+--- Ask the question, then the name and base if it is getting a worktree of its
+--- own, then start.
+---
+--- The name and base are asked rather than derived because where the work goes
+--- is a decision, and one that is painful to discover you got wrong an hour
+--- later. Both are prefilled with the answer you would have got anyway, so the
+--- common path is two more presses of enter, and both complete: the name
+--- against worktrees this project already has, the base against every branch
+--- and tag.
 local function ask_and_start(chosen, ctx, root)
-	local where = isolate and "worktree" or "here"
 	local subject = ctx.selection and ("selection " .. ctx.selection) or ctx.path or "no file"
-	vim.ui.input({ prompt = ("%s (%s, %s): "):format(chosen.name, where, subject) }, function(question)
+	vim.ui.input({
+		prompt = ("%s (%s, %s): "):format(chosen.name, isolate and "worktree" or "here", subject),
+	}, function(question)
 		if question == nil then
 			return
 		end
-		M.start({
-			cli = chosen.name,
-			question = question,
-			ctx = ctx,
-			root = root,
-			isolate = isolate,
-		})
+		local function go(name, base)
+			M.start({
+				cli = chosen.name,
+				question = question,
+				name = name,
+				base = base,
+				ctx = ctx,
+				root = root,
+				isolate = isolate,
+			})
+		end
+		if not isolate or not root then
+			return go(nil, nil)
+		end
+		vim.ui.input({
+			prompt = "worktree name: ",
+			default = name_for(question, chosen.name),
+			completion = "customlist,v:lua._agent_names",
+		}, function(name)
+			if name == nil then
+				return
+			end
+			vim.ui.input({
+				prompt = "cut from: ",
+				default = "HEAD",
+				completion = "customlist,v:lua._agent_refs",
+			}, function(base)
+				if base == nil then
+					return
+				end
+				go(worktree.slug(name), vim.trim(base) ~= "" and vim.trim(base) or "HEAD")
+			end)
+		end)
 	end)
 end
 
@@ -64,14 +143,14 @@ end
 ---   isolate   give it a worktree of its own
 function M.start(opts)
 	local root = opts.root or worktree.repo()
-	local name = name_for(opts.question, opts.cli)
+	local name = opts.name or name_for(opts.question, opts.cli)
 	local cwd, branch, base = vim.fn.getcwd(), nil, nil
 
 	if opts.isolate then
 		if not root then
 			vim.notify("agent: not a git repository, running here instead", vim.log.levels.WARN)
 		else
-			local dir, made, from, err = worktree.create(root, name)
+			local dir, made, from, err = worktree.create(root, name, opts.base)
 			if not dir then
 				vim.notify("agent: " .. tostring(err) .. ", running here instead", vim.log.levels.WARN)
 			else

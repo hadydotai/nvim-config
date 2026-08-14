@@ -7,17 +7,17 @@
 -- checkout and gives back the ability to run several and read the diffs
 -- separately.
 --
--- They live under .data/, which is gitignored, so a few gigabytes of checkouts
--- never reach a commit. The layout mirrors what latis does:
+-- By default they live under .data/, which is gitignored, so a few gigabytes of
+-- checkouts never reach a commit:
 --
 --   .data/nvim/agents/worktrees/<repo>-<hash>/<name>
 --
 -- The hash is of the full path to the repository, so two checkouts of the same
--- project with the same basename stay apart.
+-- project with the same basename stay apart. Where they go, and what gets put
+-- into one so the project actually builds, is per project and lives in
+-- agent_project.lua.
 
 local M = {}
-
-local ROOT = vim.fn.stdpath("data") .. "/agents/worktrees"
 
 local function git(args, cwd)
 	local out = vim.system(vim.list_extend({ "git" }, args), { cwd = cwd, text = true }):wait()
@@ -42,14 +42,34 @@ function M.slug(text)
 	return slug ~= "" and slug or ("run-" .. os.date("%H%M%S"))
 end
 
---- A short stable digest of a path, so two projects called "api" do not share
---- a directory.
-local function digest(path)
-	return vim.fn.sha256(path):sub(1, 12)
+--- Where this project's worktrees live. Asked of the project setup rather than
+--- fixed here, since that is where you get to move them (see
+--- agent_project.lua); required lazily because that module asks us where the
+--- repository is.
+function M.dir(repo, name, config)
+	return require("agent_project").worktree_dir(repo, config) .. "/" .. name
 end
 
-function M.dir(repo, name)
-	return ("%s/%s-%s/%s"):format(ROOT, vim.fn.fnamemodify(repo, ":t"), digest(repo), name)
+--- The worktrees this project already has, which is what the setup buffer
+--- offers to bring up to date. Read from git rather than from the directory,
+--- so one removed behind our back is not reported as still there.
+function M.list(repo, config)
+	if not repo then
+		return {}
+	end
+	local root = require("agent_project").worktree_dir(repo, config)
+	local ok, out = git({ "worktree", "list", "--porcelain" }, repo)
+	if not ok then
+		return {}
+	end
+	local dirs = {}
+	for line in out:gmatch("[^\n]+") do
+		local dir = line:match("^worktree (.+)$")
+		if dir and dir:sub(1, #root + 1) == root .. "/" then
+			dirs[#dirs + 1] = dir
+		end
+	end
+	return dirs
 end
 
 --- Make a worktree for `name` on a new branch cut from HEAD.
@@ -85,6 +105,21 @@ function M.create(repo, name, base)
 	if not ok then
 		return nil, nil, nil, err ~= "" and err or "git worktree add failed"
 	end
+
+	-- A checkout with none of the gitignored things the project needs is a
+	-- checkout that does not build, so the setup is part of creating one
+	-- rather than something to remember afterwards.
+	local project = require("agent_project")
+	local config = project.load(repo)
+	local _, failed = project.apply(repo, dir, config)
+	if #failed > 0 then
+		vim.notify("agent: worktree setup:\n  " .. table.concat(failed, "\n  "), vim.log.levels.WARN)
+	end
+	project.run_after(repo, dir, config, function(broke)
+		if broke > 0 then
+			vim.notify(("agent: %d setup command failed in %s"):format(broke, name), vim.log.levels.WARN)
+		end
+	end)
 
 	return dir, branch, from
 end

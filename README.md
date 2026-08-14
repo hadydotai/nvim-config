@@ -31,6 +31,7 @@ covers the things that need explaining rather than listing.
 | `lua/agent_dash.lua` | `<leader>ad`, the dashboard buffer                   |
 | `lua/agent_sidebar.lua` | `<leader>ae`, the same thing as a column          |
 | `lua/agent_worktree.lua` | a git worktree per agent, so two cannot collide |
+| `lua/agent_project.lua` | `<leader>aw`, what a new worktree needs to build |
 | `lua/agent_context.lua` | the file, line or selection an agent is asked about |
 | `lsp/*.lua`          | one file per language server                        |
 | `.data/ .state/ .cache/` | generated, gitignored: plugins, parsers, undo, logs |
@@ -175,6 +176,7 @@ working, which is waiting on you and which has finished.
 | `<leader>ac` | send this file, line, selection or its diagnostics to one already running |
 | `<leader>ad` | the dashboard |
 | `<leader>ae` | the sidebar, a column narrow enough to leave open |
+| `<leader>aw` | the worktree setup for this project |
 
 On the dashboard, `<CR>` opens that agent's terminal through the same window
 overlay `<leader>f` uses, `i` types a line to it without leaving, `a` starts
@@ -233,6 +235,48 @@ turns and neither knows the other exists, so the second overwrites the first
 and the diff you read afterwards is neither of them. Separate worktrees also
 mean the diff column on the dashboard is that agent's work and nothing else,
 which is why it is only shown for a run that has one.
+
+Starting one asks for the name and what to cut it from, both prefilled with the
+answer you would have got anyway, so the usual path is two more presses of
+enter. Both complete: the name against worktrees this project already has, so
+completing one is how you deliberately send a second agent into an existing
+worktree, and the base against every branch and tag. `agent/` branches are left
+out of that list, since basing new work on another agent's unreviewed work is
+rarely what you meant.
+
+### What a new worktree needs
+
+`<leader>aw` opens the setup for the project you are in: what to copy, what to
+symlink, what to run afterwards.
+
+A fresh worktree is a clean checkout, which is correct and useless. Everything
+a project needs in order to build is gitignored on purpose, so an agent arrives
+to no `.env`, no `node_modules` and no build cache, and its first discovery is
+that the project does not run.
+
+| | |
+| --- | --- |
+| `a` | add to the list the cursor is in |
+| `e` | edit, `d` delete, `<Space>` turn one off without losing it |
+| `s` | apply the setup to every worktree this project already has |
+| `g` | keep this as the starting point for projects with no setup yet |
+
+Copy is for small files that should differ per worktree, symlink for large ones
+that should not be duplicated, which is the only reason both exist. Patterns are
+globs, and completion offers exactly the files git is ignoring, because that is
+almost exactly the list worth copying. The commands run after creation are
+asynchronous: an install takes minutes and the agent should be starting while it
+happens, not afterwards.
+
+Nothing is overwritten. Re-running the setup fills in what a worktree is missing
+rather than replacing what is there, since a worktree that has been worked in
+may have a `.env` the agent changed deliberately.
+
+The setup is stored per project under `.state/`, keyed by the path to the
+repository, so two checkouts of the same project keep separate settings and
+nothing is written into the project itself. Where the worktrees go is part of
+it: leave it alone for the default, or set a directory of your own, where
+`{project}` stands for the repository's name.
 
 ### What it does not do
 
