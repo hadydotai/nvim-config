@@ -185,6 +185,32 @@ local function lua_ls_cmd()
 	}, " && ")
 end
 
+--- The musl build on Linux rather than the gnu one: it is statically linked, so
+--- it does not care which glibc the distribution shipped, and this is a binary
+--- we drop in rather than one a package manager keeps in step.
+local function ripgrep_cmd()
+	local target
+	if M.platform() == "mac" then
+		target = (cpu() == "arm64" and "aarch64" or "x86_64") .. "-apple-darwin"
+	else
+		target = (cpu() == "arm64" and "aarch64" or "x86_64") .. "-unknown-linux-musl"
+	end
+	-- as with lua-language-server, the asset name embeds the version, so the
+	-- tag has to be resolved before there is a URL to fetch
+	return table.concat({
+		'tag=$(curl -fsSL https://api.github.com/repos/BurntSushi/ripgrep/releases/latest'
+			.. ' | sed -n \'s/.*"tag_name": *"\\([^"]*\\)".*/\\1/p\' | head -1)',
+		("mkdir -p %s"):format(BIN),
+		('curl -fsSL "https://github.com/BurntSushi/ripgrep/releases/download/$tag/ripgrep-$tag-%s.tar.gz"'):format(
+			target
+		) .. " -o /tmp/ripgrep.tar.gz",
+		"rm -rf /tmp/ripgrep-unpack && mkdir -p /tmp/ripgrep-unpack",
+		"tar -xzf /tmp/ripgrep.tar.gz -C /tmp/ripgrep-unpack --strip-components=1",
+		("cp /tmp/ripgrep-unpack/rg %s/rg"):format(BIN),
+		("chmod +x %s/rg"):format(BIN),
+	}, " && ")
+end
+
 local function pylsp_cmd()
 	return ("python3 -m venv %s/venv && %s/venv/bin/pip install --quiet --upgrade python-lsp-server"):format(DATA, DATA)
 end
@@ -238,6 +264,7 @@ local DEPS = {
 		probe = "version",
 	},
 	{ bin = "tree-sitter", why = "builds treesitter parsers", get = tree_sitter_cmd },
+	{ bin = "rg", why = "greps the project for <leader>g", get = ripgrep_cmd },
 	{ bin = "lua-language-server", why = "lua language server", get = lua_ls_cmd },
 	{ bin = "pylsp", why = "python language server", get = pylsp_cmd, after = "python3" },
 	{ bin = "tsgo", why = "typescript language server", get = tsgo_cmd, after = "npm" },

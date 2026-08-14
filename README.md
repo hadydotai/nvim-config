@@ -16,7 +16,7 @@ covers the things that need explaining rather than listing.
 | `init.lua`           | the load order, and nothing else                     |
 | `lua/paths.lua`      | redirects everything Neovim writes into this directory |
 | `lua/deps.lua`       | what the machine needs, and how to get it per platform |
-| `lua/picker.lua`     | the modal filterable dialog `<leader>f/b/s/h` all use |
+| `lua/picker.lua`     | the modal filterable dialog `<leader>f/b/s/g/h` all use |
 | `lua/win_pick.lua`   | "which window should this open in", the outline overlay |
 | `lua/pairs.lua`      | auto-closing brackets, quotes and docstring fences   |
 | `lua/diagnostics.lua` | the quickfix list of them, and the full text of one |
@@ -24,6 +24,7 @@ covers the things that need explaining rather than listing.
 | `lua/title.lua`      | the terminal's own title: the file, then the project |
 | `lua/markdown.lua`   | `<leader>p`, markdown read as rendered rather than as source |
 | `lua/unignore.lua`   | the `.gitignore`'d files `<leader>f` shows anyway    |
+| `lua/grep.lua`       | `<leader>g`, every matching line in the project      |
 | `lsp/*.lua`          | one file per language server                        |
 | `.data/ .state/ .cache/` | generated, gitignored: plugins, parsers, undo, logs |
 
@@ -35,8 +36,8 @@ covers the things that need explaining rather than listing.
 
 `:Deps` shows what is present, `:Deps install` fetches what is missing. System
 packages (compiler, git, curl, node, python) come from the OS package manager
-and differ per platform; the language servers and the tree-sitter CLI are
-fetched straight from upstream into `.data/` with no sudo.
+and differ per platform; the language servers, ripgrep and the tree-sitter CLI
+are fetched straight from upstream into `.data/` with no sudo.
 
 The platform is the family rather than the distribution, taken from `ID` and
 then `ID_LIKE` in `/etc/os-release`, which is what makes derivatives work
@@ -70,8 +71,8 @@ tool installed.
 ## Opening things
 
 `<leader>f` (files), `<leader>b` (buffers), `<leader>s` (symbols in this
-buffer) and `<leader>h` (mappings) are the same dialog. Type to narrow,
-`<C-n>`/`<C-p>` to move, `<Esc>` to close.
+buffer), `<leader>g` (lines matching a pattern) and `<leader>h` (mappings) are
+the same dialog. Type to narrow, `<C-n>`/`<C-p>` to move, `<Esc>` to close.
 
 `<leader>f`, `<leader>b` and `<leader>s` share netrw's two-key convention for
 where a thing lands, through the same overlay:
@@ -120,6 +121,35 @@ what you actually navigate with and the order it returns is its own. And
 `<C-.>` is the one picker key not listed in `<leader>h`, along with the rest of
 the picker's keys, which are buffer-local to a dialog that does not exist until
 you open it; the footer is where they are advertised.
+
+### Grep
+
+`<leader>g` is every line in the project matching what you type, through the
+same dialog and the same two-key split, so a match lands where a file does.
+`<C-q>` puts everything on screen in the quickfix list.
+
+It is the `<leader>S` shape rather than the `<leader>f` one: the typing goes to
+ripgrep, not to the filter, since only ripgrep has read the files. The list is
+replaced on every keystroke, debounced, and the reply a later keystroke
+supersedes is not merely ignored but killed, since a search of a large tree
+that nobody is waiting for is still reading the disk.
+
+The pattern is ripgrep's, so a regular expression, with `--smart-case`:
+lowercase matches anything, a capital makes it case sensitive. Half-written
+regular expressions are the normal state of affairs while typing, so the error
+an unclosed bracket comes back with is treated as "no matches yet" rather than
+reported.
+
+One row per line, not per match. `--vimgrep` reports every match, so a line
+matching three times arrives three times, and since a row here is the line and
+where it is, those would be three rows that look identical. The column of the
+first match is kept, which is where the cursor lands. At a thousand rows it
+stops, which the title says.
+
+Ripgrep respects `.gitignore` itself, so the listing agrees with `<leader>f`
+about what is in the project. It does not know about the `<C-.>` exceptions
+above, which is a `<leader>f` thing: git pathspecs and ripgrep globs are close
+enough to look interchangeable and different enough to be wrong quietly.
 
 ## Pairs
 

@@ -394,8 +394,9 @@ end
 ---   fuzzy    match with matchfuzzypos instead of AND-ed substrings
 ---   footer   right-aligned hint text
 ---   actions  map of lhs to function(item); the list closes before it runs
----   commands map of lhs to function(); like actions but about the list rather
----            than a row in it, so it fires with nothing highlighted too
+---   commands map of lhs to function(shown); like actions but about the list
+---            rather than a row in it, so it fires with nothing highlighted
+---            too, and is given every item currently on screen
 ---   query    function(text, done); when given, typing re-asks it for the whole
 ---            list instead of narrowing `items`, which stay the first answer
 function M.open(opts)
@@ -531,11 +532,19 @@ function M.open(opts)
 
 	-- About the list rather than a row in it, so unlike an action these fire
 	-- with nothing highlighted: the reason to reach for one is frequently that
-	-- what you were looking for is not here.
+	-- what you were looking for is not here. They are handed everything on
+	-- screen, which is what makes "send this list somewhere" expressible.
 	for lhs, run in pairs(opts.commands or {}) do
 		map({ "i", "n" }, lhs, function()
+			local v = view
+			local shown = {}
+			for i, row in ipairs(v and v.shown or {}) do
+				shown[i] = row.item.value
+			end
 			close()
-			vim.schedule(run)
+			vim.schedule(function()
+				run(shown)
+			end)
 		end)
 	end
 

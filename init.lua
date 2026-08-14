@@ -12,6 +12,7 @@ require("netrw_tree").setup()
 require("keymap")
 require("pairs")
 require("find")
+require("grep")
 require("buffers")
 require("symbols")
 require("diagnostics") -- after keymap.lua: mapleader has to be set before <leader>q
