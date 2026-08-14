@@ -26,6 +26,10 @@
 --                scrollback: all three repaint in place rather than letting
 --                lines scroll off, so the buffer never holds more than a
 --                screen of the conversation whatever we pass
+--   the id       claude and grok accept a session id of our choosing, so a
+--                conversation can be resumed by a name we wrote down. codex
+--                mints its own, so its id is looked up by directory instead.
+--                `mints` says which
 --
 -- Verified against claude 2.x, codex 0.147 and grok as installed: hooks fire,
 -- grok's auth survives the mirror, and both --no-alt-screen flags exist.
@@ -199,6 +203,27 @@ local function mirror(real, into, ours)
 	return true
 end
 
+--- A version 4 UUID, which is the shape claude and grok both insist on for a
+--- session id. Minting it ourselves is the whole trick behind resuming: the
+--- conversation is known by a name we chose and wrote down, so it can be
+--- picked up again after Neovim has been closed and the process is long gone.
+function M.uuid()
+	local bytes = { string.byte(vim.uv.random(16), 1, 16) }
+	bytes[7] = bit.bor(bit.band(bytes[7], 0x0f), 0x40)
+	bytes[9] = bit.bor(bit.band(bytes[9], 0x3f), 0x80)
+	local hex = {}
+	for i, byte in ipairs(bytes) do
+		hex[i] = ("%02x"):format(byte)
+	end
+	return table.concat({
+		table.concat(hex, "", 1, 4),
+		table.concat(hex, "", 5, 6),
+		table.concat(hex, "", 7, 8),
+		table.concat(hex, "", 9, 10),
+		table.concat(hex, "", 11, 16),
+	}, "-")
+end
+
 --------------------------------------------------------------------------- --
 -- the CLIs
 --------------------------------------------------------------------------- --
@@ -208,8 +233,10 @@ local CLIS = {
 		name = "claude",
 		label = "Claude Code",
 		bin = "claude",
-		-- No way to leave the alternate screen, so its terminal buffer keeps
-		-- nothing at all once it exits. See `inline`.
+		-- Takes a session id of our choosing, so a run can be resumed by name.
+		mints = true,
+		-- And has no way to leave the alternate screen, so its terminal buffer
+		-- keeps nothing at all once it exits. See `inline`.
 		inline = false,
 		-- A flag, so there is no home to mirror and nothing installed at all.
 		prepare = function(self)
@@ -226,6 +253,14 @@ local CLIS = {
 			if self.settings then
 				vim.list_extend(argv, { "--settings", self.settings })
 			end
+			-- Resuming keeps the id rather than minting a new one, which is
+			-- what --fork-session would do, so the name we wrote down stays
+			-- good for every resume after this one.
+			if run.resume then
+				vim.list_extend(argv, { "--resume", run.resume })
+			elseif run.session_id then
+				vim.list_extend(argv, { "--session-id", run.session_id })
+			end
 			if run.prompt then
 				argv[#argv + 1] = run.prompt
 			end
@@ -241,6 +276,9 @@ local CLIS = {
 		-- once per home. That is the reason this mirror is kept rather than
 		-- built per run: trust is recorded here, so you answer it once.
 		note = "codex asks you to trust these hooks the first time it starts. Choose 'Trust all and continue'; it is remembered.",
+		-- Codex names its own conversations, so the id is found rather than
+		-- chosen (see resume_id below).
+		mints = false,
 		inline = true,
 		prepare = function(self)
 			local home = DATA .. "/codex-home"
@@ -259,11 +297,48 @@ local CLIS = {
 		end,
 		argv = function(self, run)
 			local argv = { self.bin }
+			-- A subcommand, so it has to lead.
+			if run.resume then
+				vim.list_extend(argv, { "resume", run.resume })
+			end
 			argv[#argv + 1] = "--no-alt-screen"
 			if run.prompt then
 				argv[#argv + 1] = run.prompt
 			end
 			return argv
+		end,
+		--- The conversation codex last had in `cwd`, or nil.
+		---
+		--- Codex mints its own id and does not tell us one, so it is looked up
+		--- instead: every session is a rollout file whose first line records
+		--- the directory it was started in, and whose name ends in the id. The
+		--- files are laid out by date, so walking them newest first finds the
+		--- one we mean without reading many.
+		---
+		--- Late rather than at launch on purpose: a lookup done now also finds
+		--- a codex you started in that worktree from an ordinary terminal.
+		resume_id = function(self, cwd)
+			local root = (self.home or (vim.env.HOME .. "/.codex")) .. "/sessions"
+			local files = vim.fn.glob(root .. "/*/*/*/rollout-*.jsonl", true, true)
+			table.sort(files, function(a, b)
+				return a > b
+			end)
+			for i, path in ipairs(files) do
+				if i > 200 then
+					break
+				end
+				local f = io.open(path, "r")
+				if f then
+					local first = f:read("*l") or ""
+					f:close()
+					local ok, meta = pcall(vim.json.decode, first)
+					local payload = ok and type(meta) == "table" and meta.payload or nil
+					if payload and payload.cwd == cwd and payload.session_id then
+						return payload.session_id
+					end
+				end
+			end
+			return nil
 		end,
 	},
 
@@ -271,6 +346,7 @@ local CLIS = {
 		name = "grok",
 		label = "Grok",
 		bin = "grok",
+		mints = true,
 		inline = true,
 		-- Grok has no settings flag, so the same mirror trick, with the hooks
 		-- appended to a copy of config.toml. Its own config is read rather
@@ -301,6 +377,11 @@ local CLIS = {
 		end,
 		argv = function(self, run)
 			local argv = { self.bin }
+			if run.resume then
+				vim.list_extend(argv, { "--resume", run.resume })
+			elseif run.session_id then
+				vim.list_extend(argv, { "--session-id", run.session_id })
+			end
 			argv[#argv + 1] = "--no-alt-screen"
 			if run.prompt then
 				argv[#argv + 1] = run.prompt

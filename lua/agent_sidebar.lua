@@ -7,6 +7,7 @@
 --
 --   <leader>ae   toggle it
 --   <CR>         open it in the editing area: the terminal, or the worktree
+--   r            resume the conversation this row remembers
 --   d            the full dashboard, where a row can be acted on
 --
 -- It pins itself the way netrw_sidebar.lua does: fixed width, and put back
@@ -65,6 +66,14 @@ local function keys(into)
 			dash.show_in(item, target)
 		end
 	end, "Open this agent, or this worktree")
+
+	map("r", function()
+		local item = dash.items()[vim.api.nvim_win_get_cursor(0)[1]]
+		local record = item and (item.session or item.last)
+		if record then
+			require("agent_spawn").resume(record)
+		end
+	end, "Pick this conversation back up where it was left")
 
 	map("d", function()
 		require("agent_dash").open()

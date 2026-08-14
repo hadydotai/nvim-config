@@ -1,21 +1,22 @@
 -- Every agent, in a buffer: what it is, what it is doing, how long it has been
 -- doing it, and what it has changed. Then every worktree of this project whose
--- agent is gone, because the checkout outlives the process that made it.
+-- agent is gone, and every conversation left behind in one.
 --
 -- That second half is the reason this is a list of places rather than a list of
--- processes. An agent dies when Neovim quits; the branch and the worktree it
--- was working in do not, and a dashboard that showed only what is running would
+-- processes. An agent dies when Neovim quits; the branch, the worktree and the
+-- conversation do not, and a dashboard that showed only what is running would
 -- lose track of a dozen checkouts holding real work. So a row is a piece of
--- work: with an agent on it, or waiting for one.
+-- work: with an agent on it, one to bring back, or neither.
 --
 -- A buffer rather than a floating dialog because this is something you leave
 -- open and glance at, and because a window you can split, move and close with
 -- the keys you already know beats a bespoke one. It is a normal scratch buffer
 -- with normal mappings.
 --
---   <CR>   open it: the agent's terminal, or the worktree itself
+--   <CR>   open it: the agent's terminal, or the directory it worked in
 --   i      type a line to that agent without leaving the dashboard
 --   a      start an agent, in that worktree when the cursor is on one
+--   r      resume the conversation this row remembers
 --   s      stop it
 --   x      drop it: forget an agent that has exited, remove a worktree
 --   q      close the dashboard
@@ -144,27 +145,66 @@ local function refresh_trees(force)
 	end)
 end
 
---- Every row: the agents, newest first, then the worktrees nobody is in.
+--- Every row: the agents, newest first, then the worktrees nobody is in, then
+--- anywhere else a conversation was left behind.
 ---
---- An agent is matched to its worktree by where it is running, so a worktree
---- with an agent in it appears once, as the agent. Shared with the sidebar,
---- and the reason both index the same list from a line number.
+--- One row per place. An agent is matched to its worktree by where it is
+--- running, and a remembered conversation to the worktree it was had in, so a
+--- worktree shows once whether it has an agent in it, a conversation to resume,
+--- or neither. Shared with the sidebar, and the reason both index the same list
+--- from a line number.
 function M.items()
 	refresh_trees()
 	local out, taken = {}, {}
 	for _, run in ipairs(agent.runs()) do
 		out[#out + 1] = { run = run }
 		-- Including one that has exited, which still speaks for its worktree:
-		-- "finished" says more than "no agent", and the row only becomes a bare
-		-- worktree once you have forgotten the run.
+		-- "finished" says more than "resume", and the row only becomes a
+		-- worktree again once you have forgotten the run.
 		taken[run.cwd] = true
 	end
+
+	-- A worktree's record is matched by path rather than by project, since a
+	-- worktree lives under .data/ and not inside the repository it belongs to.
+	-- What is left over counts as this project's only if it was had here.
+	local root = repo()
+	local by_dir, here = {}, {}
+	for _, record in ipairs(require("agent_store").newest()) do
+		by_dir[record.cwd] = record
+		if root and (record.cwd == root or record.cwd:sub(1, #root + 1) == root .. "/") then
+			here[#here + 1] = record
+		end
+	end
+
 	for _, tree in ipairs(trees) do
 		if not taken[tree.dir] then
-			out[#out + 1] = { tree = tree }
+			out[#out + 1] = { tree = tree, last = by_dir[tree.dir] }
+			taken[tree.dir] = true
+		end
+	end
+	for _, record in ipairs(here) do
+		if not taken[record.cwd] then
+			out[#out + 1] = { session = record }
+			taken[record.cwd] = true
 		end
 	end
 	return out
+end
+
+--- How long ago, in a column's worth of characters.
+local function ago(at)
+	if not at then
+		return ""
+	end
+	local seconds = os.time() - at
+	if seconds < 60 then
+		return seconds .. "s"
+	elseif seconds < 3600 then
+		return math.floor(seconds / 60) .. "m"
+	elseif seconds < 86400 then
+		return math.floor(seconds / 3600) .. "h"
+	end
+	return math.floor(seconds / 86400) .. "d"
 end
 
 --- One row as cells. Shared with the sidebar, which drops the wide ones.
@@ -174,14 +214,31 @@ local function cells(item)
 	if tree then
 		refresh_stat(tree, tree.dir, tree.base)
 		local mark = MARK.spare
+		local last = item.last
 		return {
 			{ text = mark[1], hl = mark[2] },
 			{ text = vim.fn.fnamemodify(tree.dir, ":t"), hl = "AgentMeta" },
-			{ text = "", hl = "AgentMeta" },
-			{ text = "no agent", hl = mark[2] },
-			{ text = "", hl = "AgentMeta" },
+			{ text = last and last.cli or "", hl = "AgentMeta" },
+			{ text = last and "resume" or "no agent", hl = mark[2] },
+			{ text = last and ago(last.at) or "", hl = "AgentMeta" },
 			{ text = tree.stat and ("+%d-%d"):format(tree.stat.added, tree.stat.removed) or "", hl = "AgentAdded" },
 			{ text = tree.branch or "", hl = "AgentMeta" },
+		}
+	end
+
+	-- A conversation with nowhere of its own: had in the checkout you are
+	-- sitting in, or in a worktree that is no longer ours.
+	local session = item.session
+	if session then
+		local mark = MARK.spare
+		return {
+			{ text = mark[1], hl = mark[2] },
+			{ text = session.name or vim.fn.fnamemodify(session.cwd, ":t"), hl = "AgentMeta" },
+			{ text = session.cli, hl = "AgentMeta" },
+			{ text = "resume", hl = mark[2] },
+			{ text = ago(session.at), hl = "AgentMeta" },
+			{ text = "", hl = "AgentMeta" },
+			{ text = session.where or vim.fn.fnamemodify(session.cwd, ":t"), hl = "AgentMeta" },
 		}
 	end
 
@@ -314,7 +371,7 @@ function M.show_in(item, win)
 		return M.terminal(item.run, win)
 	end
 	win_pick.focus(win)
-	vim.cmd.edit(vim.fn.fnameescape(item.tree.dir))
+	vim.cmd.edit(vim.fn.fnameescape(item.tree and item.tree.dir or item.session.cwd))
 end
 
 --- Remove a worktree, having asked. The branch is a second question, since it
@@ -349,6 +406,9 @@ local function drop_tree(tree)
 		vim.notify("agent: " .. tostring(err), vim.log.levels.WARN)
 	end
 	known[tree.dir] = nil
+	-- The conversations were about work that no longer exists anywhere, and a
+	-- resume into a directory that is gone is not a resume.
+	require("agent_store").forget_dir(tree.dir)
 	refresh_trees(true)
 	vim.notify("agent: removed " .. name)
 end
@@ -397,6 +457,15 @@ local function keys(into)
 		require("agent_spawn").show(false, into)
 	end, "Start an agent, in this worktree when the cursor is on one")
 
+	map("r", function()
+		local item = current()
+		local record = item and (item.session or item.last)
+		if not record then
+			return
+		end
+		require("agent_spawn").resume(record)
+	end, "Pick this conversation back up where it was left")
+
 	map("s", function()
 		local item = current()
 		if item and item.run and agent.stop(item.run) then
@@ -411,6 +480,10 @@ local function keys(into)
 		end
 		if item.tree then
 			return drop_tree(item.tree)
+		end
+		if item.session then
+			require("agent_store").forget(item.session.id)
+			return
 		end
 		-- An agent first, its worktree second. Forgetting the run leaves the
 		-- worktree behind as a row of its own, which is the point: dropping the
@@ -468,7 +541,7 @@ function M.open(run)
 		-- In the winbar rather than the buffer, so what a row means and which
 		-- row you are on stay the same question: a legend on line one would put
 		-- every agent one line further down than the list says it is.
-		vim.wo[win].winbar = "%#AgentMeta# <CR> open   i say   a start   s stop   x drop   q close"
+		vim.wo[win].winbar = "%#AgentMeta# <CR> open   i say   a start   r resume   s stop   x drop   q close"
 	end
 	M.render(into, M.WIDE)
 

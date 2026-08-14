@@ -203,6 +203,52 @@ function M.start(opts)
 	return run
 end
 
+--- Pick an agent back up where it was left, from what was written down about
+--- it (see agent_store).
+---
+--- The id is the record's for claude and grok, which took one we chose. Codex
+--- named its own, so it is looked up now, by the directory - which also finds
+--- a codex you started in that worktree from an ordinary terminal.
+function M.resume(record)
+	if not record then
+		return nil
+	end
+	local adapter = cli.get(record.cli)
+	if not adapter then
+		vim.notify("agent: " .. tostring(record.cli) .. " is not installed", vim.log.levels.WARN)
+		return nil
+	end
+	local id = record.session
+	if not id and adapter.resume_id then
+		id = adapter:resume_id(record.cwd)
+	end
+	if not id then
+		vim.notify(
+			("agent: no %s conversation recorded for %s"):format(record.cli, record.name or record.cwd),
+			vim.log.levels.WARN
+		)
+		return nil
+	end
+
+	local run, err = agent.spawn({
+		cli = record.cli,
+		cwd = record.cwd,
+		name = record.name,
+		label = record.where,
+		base = record.base,
+		resume = id,
+	})
+	if not run then
+		vim.notify("agent: " .. tostring(err), vim.log.levels.ERROR)
+		return nil
+	end
+	local dash = require("agent_dash")
+	if not dash.visible() then
+		dash.open(run)
+	end
+	return run
+end
+
 --- The dialog. `visual` says the mapping came from a selection, which decides
 --- what gets sent along without asking. `into` is a worktree that already
 --- exists, which the dashboard passes when the cursor is on one.

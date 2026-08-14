@@ -135,8 +135,11 @@ local function apply(event)
 	if not run then
 		return
 	end
-	if event.session ~= "" then
+	-- Codex names its own conversations, so this is the one chance to hear the
+	-- id from the agent itself rather than looking it up later.
+	if event.session ~= "" and run.session ~= event.session then
 		run.session = event.session
+		require("agent_store").record(run)
 	end
 	local name = event.event
 	if name == "UserPromptSubmit" then
@@ -231,6 +234,7 @@ end
 ---   prompt  what to ask it, passed as the CLI's initial prompt
 ---   name    what to call it on the dashboard
 ---   label   extra description of where it is running, e.g. a worktree branch
+---   resume  a conversation id to pick up instead of starting a new one
 ---
 --- Returns the run, or nil and a reason.
 function M.spawn(opts)
@@ -257,6 +261,11 @@ function M.spawn(opts)
 		base = opts.base,
 		cwd = cwd,
 		prompt = opts.prompt,
+		resume = opts.resume,
+		-- Minted here, before the agent starts, for the CLIs that will take
+		-- one: that is what makes this conversation findable again tomorrow.
+		-- A resume keeps the id it is resuming rather than minting a second.
+		session_id = opts.resume or (adapter.mints and cli.uuid() or nil),
 		status = "starting",
 		doing = "starting",
 		since = os.time(),
@@ -289,7 +298,10 @@ function M.spawn(opts)
 					run.doing = code == 0 and "finished" or ("exited " .. code)
 					run.since = os.time()
 					run.updated = os.time()
-					vim.schedule(changed)
+					vim.schedule(function()
+						require("agent_store").record(run)
+						changed()
+					end)
 				end,
 			})
 		end)
@@ -309,6 +321,7 @@ function M.spawn(opts)
 	vim.b[buf].agent_run = run.id
 
 	runs[run.id] = run
+	require("agent_store").record(run)
 	status(run, "working", "starting")
 	listen()
 	changed()

@@ -31,6 +31,7 @@ covers the things that need explaining rather than listing.
 | `lua/agent_dash.lua` | `<leader>ad`, the dashboard buffer                   |
 | `lua/agent_sidebar.lua` | `<leader>ae`, the same thing as a column          |
 | `lua/agent_worktree.lua` | a git worktree per agent, so two cannot collide |
+| `lua/agent_store.lua` | the agents you have run, so one can be resumed later |
 | `lua/agent_project.lua` | `<leader>aw`, what a new worktree needs to build |
 | `lua/agent_tree.lua` | picking that from the project tree rather than typing it |
 | `lua/agent_context.lua` | the file, line or selection an agent is asked about |
@@ -181,9 +182,9 @@ working, which is waiting on you and which has finished.
 
 On the dashboard, `<CR>` opens that agent's terminal through the same window
 overlay `<leader>f` uses, `i` types a line to it without leaving, `a` starts
-another, `s` stops one and `x` drops one: an agent that has exited is
-forgotten, a worktree is removed. The keys are in the window bar, so the list
-stays a list.
+another, `r` resumes one you left behind, `s` stops one and `x` drops one: an
+agent that has exited is forgotten, a worktree is removed. The keys are in the
+window bar, so the list stays a list.
 
 ### Getting to one
 
@@ -254,8 +255,9 @@ rather than a process: with an agent on it, or waiting for one. An agent dies
 when Neovim quits and its checkout does not, and a list of only what is running
 would quietly lose track of a dozen of them holding real work.
 
-A worktree with nobody in it reads `no agent`, with its branch and what has
-changed in it since it left yours. That last number is measured from where the
+A worktree with nobody in it reads `resume` when there is a conversation to pick
+back up and `no agent` when there is not, with its branch and what has changed
+in it since it left yours. That last number is measured from where the
 two branches parted, so it stays right after you have carried on committing in
 the checkout you are sitting in.
 
@@ -312,6 +314,28 @@ repository, so two checkouts of the same project keep separate settings and
 nothing is written into the project itself. Where the worktrees go is part of
 it: leave it alone for the default, or set a directory of your own, where
 `{project}` stands for the repository's name.
+
+### Picking one back up
+
+An agent dies with the editor. Its conversation does not, and `r` on the
+dashboard starts the same agent again, in the same directory, resuming the same
+conversation.
+
+That works because the name is ours. Claude and grok both accept a `--session-id`
+we mint before they start, so the conversation is known by an id we chose and
+wrote down, and resuming keeps it rather than forking a new one. Codex names its
+own, so it is looked up instead: every codex session is a file recording the
+directory it was started in, so the one to resume is found by where it ran -
+which also finds a codex you started in that worktree from an ordinary terminal.
+
+The list is `.state/nvim/agents/sessions.json`, one record per run: which agent,
+where, its id, and when it was last alive. It keeps the newest 40 and drops
+anything whose directory has gone, so removing a worktree takes its
+conversations with it.
+
+Verified against all three by starting one, closing it, and resuming: claude and
+grok recalled a word from the previous conversation through an id we minted,
+codex through one found by directory.
 
 ### What it does not do
 
