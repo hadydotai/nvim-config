@@ -50,6 +50,27 @@ function M.dir(repo, name, config)
 	return require("agent_project").worktree_dir(repo, config) .. "/" .. name
 end
 
+--- Read `git worktree list --porcelain` into records, keeping only the ones
+--- under `root`. The filter is what makes this "the worktrees we made" rather
+--- than every one the repository has: a worktree you set up by hand is yours,
+--- and nothing here should be offering to change or remove it.
+local function parse(out, root)
+	local trees, current = {}, nil
+	for line in out:gmatch("[^\n]+") do
+		local dir = line:match("^worktree (.+)$")
+		if dir then
+			current = dir:sub(1, #root + 1) == root .. "/" and { dir = dir } or nil
+			if current then
+				trees[#trees + 1] = current
+			end
+		elseif current then
+			current.head = line:match("^HEAD (.+)$") or current.head
+			current.branch = line:match("^branch refs/heads/(.+)$") or current.branch
+		end
+	end
+	return trees
+end
+
 --- The worktrees this project already has, which is what the setup buffer
 --- offers to bring up to date. Read from git rather than from the directory,
 --- so one removed behind our back is not reported as still there.
@@ -63,13 +84,46 @@ function M.list(repo, config)
 		return {}
 	end
 	local dirs = {}
-	for line in out:gmatch("[^\n]+") do
-		local dir = line:match("^worktree (.+)$")
-		if dir and dir:sub(1, #root + 1) == root .. "/" then
-			dirs[#dirs + 1] = dir
-		end
+	for _, tree in ipairs(parse(out, root)) do
+		dirs[#dirs + 1] = tree.dir
 	end
 	return dirs
+end
+
+--- The same worktrees as records, and without blocking: where each one is,
+--- which branch is checked out there, and what that branch is sitting on.
+---
+--- Asynchronous because the dashboard asks for this on a timer, and an editor
+--- that waits on git every second is an editor that stutters every second.
+function M.trees(repo, config, done)
+	if not repo then
+		return done({})
+	end
+	local root = require("agent_project").worktree_dir(repo, config)
+	vim.system({ "git", "worktree", "list", "--porcelain" }, { cwd = repo, text = true }, function(out)
+		vim.schedule_wrap(done)(out.code == 0 and parse(vim.trim(out.stdout or ""), root) or {})
+	end)
+end
+
+--- The commit a worktree's branch and your checkout last had in common.
+---
+--- This is what "what has it changed" has to be measured against for a
+--- worktree whose agent is gone, since the commit it was cut from was only
+--- ever held in memory. It is the honest answer even when the main line has
+--- moved on since, which a plain diff against HEAD is not.
+function M.forked(repo, dir, done)
+	vim.system({ "git", "rev-parse", "HEAD" }, { cwd = repo, text = true }, function(head)
+		if head.code ~= 0 then
+			return vim.schedule_wrap(done)(nil)
+		end
+		vim.system(
+			{ "git", "merge-base", "HEAD", vim.trim(head.stdout or "") },
+			{ cwd = dir, text = true },
+			function(base)
+				vim.schedule_wrap(done)(base.code == 0 and vim.trim(base.stdout or "") or nil)
+			end
+		)
+	end)
 end
 
 --- Make a worktree for `name` on a new branch cut from HEAD.
@@ -124,10 +178,16 @@ function M.create(repo, name, base)
 	return dir, branch, from
 end
 
---- Remove a worktree and, if it is unmerged work you asked to drop, its branch.
---- Refuses while the checkout is dirty unless told otherwise, because the whole
---- point of the thing is work you have not read yet.
-function M.remove(repo, dir, force)
+--- Remove a worktree, and its branch too when asked.
+---
+--- git refuses while the checkout is dirty, and that refusal is passed straight
+--- back rather than worked around: the whole point of the thing is work you
+--- have not read yet. `force` is how you say you have decided anyway.
+---
+--- The branch is left alone by default even though the checkout is gone,
+--- because a branch costs nothing and is the only copy of whatever the agent
+--- committed. Deleting it is a separate answer to a separate question.
+function M.remove(repo, dir, force, branch)
 	if not repo or vim.fn.isdirectory(dir) == 0 then
 		return false, "no such worktree"
 	end
@@ -138,6 +198,12 @@ function M.remove(repo, dir, force)
 	local ok, _, err = git(args, repo)
 	if not ok then
 		return false, err ~= "" and err or "git worktree remove failed"
+	end
+	if branch then
+		local gone, _, why = git({ "branch", "-D", branch }, repo)
+		if not gone then
+			return true, why ~= "" and why or ("could not delete " .. branch)
+		end
 	end
 	return true
 end

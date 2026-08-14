@@ -205,11 +205,12 @@ local function listen()
 	ticker:start(1000, 1000, function()
 		vim.schedule(function()
 			drain()
-			-- Elapsed time is on screen, so the views need waking even when
-			-- nothing has happened.
-			if next(runs) then
-				changed()
-			end
+			-- The views are woken whether or not anything happened here: elapsed
+			-- time is on screen, and they show worktrees as well as runs, which
+			-- change without this file ever hearing about it. Both are guarded
+			-- on being visible, so the cost of a tick nobody is watching is a
+			-- loop over an empty list.
+			changed()
 		end)
 	end)
 end

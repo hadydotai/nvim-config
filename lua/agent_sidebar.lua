@@ -1,4 +1,4 @@
--- The same agents as the dashboard, in a column narrow enough to leave open.
+-- The same rows as the dashboard, in a column narrow enough to leave open.
 --
 -- The dashboard is something you go to; this is something you keep in the
 -- corner of your eye while writing code, so it carries only what can be read
@@ -6,7 +6,8 @@
 -- is a column the dashboard has room for and this does not.
 --
 --   <leader>ae   toggle it
---   <CR>         open that agent's terminal in the editing area
+--   <CR>         open it in the editing area: the terminal, or the worktree
+--   d            the full dashboard, where a row can be acted on
 --
 -- It pins itself the way netrw_sidebar.lua does: fixed width, and put back
 -- where it belongs if a window command moves it.
@@ -57,21 +58,30 @@ local function keys(into)
 	end
 
 	map("<CR>", function()
-		local run = agent.runs()[vim.api.nvim_win_get_cursor(0)[1]]
+		local item = dash.items()[vim.api.nvim_win_get_cursor(0)[1]]
 		local side = window()
 		local target = side and editing(side)
-		if run and target then
-			dash.terminal(run, target)
+		if item and target then
+			dash.show_in(item, target)
 		end
-	end, "Open this agent's terminal")
+	end, "Open this agent, or this worktree")
 
 	map("d", function()
 		require("agent_dash").open()
 	end, "Open the full dashboard")
 
 	map("a", function()
-		require("agent_spawn").show(false)
-	end, "Start an agent")
+		local item = dash.items()[vim.api.nvim_win_get_cursor(0)[1]]
+		local into = item
+			and item.tree
+			and {
+				dir = item.tree.dir,
+				branch = item.tree.branch,
+				name = vim.fn.fnamemodify(item.tree.dir, ":t"),
+				base = item.tree.base,
+			}
+		require("agent_spawn").show(false, into)
+	end, "Start an agent, in this worktree when the cursor is on one")
 
 	map("q", M.close, "Close the sidebar")
 end

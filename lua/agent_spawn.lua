@@ -91,10 +91,11 @@ end
 --- common path is two more presses of enter, and both complete: the name
 --- against worktrees this project already has, the base against every branch
 --- and tag.
-local function ask_and_start(chosen, ctx, root)
+local function ask_and_start(chosen, ctx, root, into)
 	local subject = ctx.selection and ("selection " .. ctx.selection) or ctx.path or "no file"
+	local where = into and into.name or (isolate and "worktree" or "here")
 	vim.ui.input({
-		prompt = ("%s (%s, %s): "):format(chosen.name, isolate and "worktree" or "here", subject),
+		prompt = ("%s (%s, %s): "):format(chosen.name, where, subject),
 	}, function(question)
 		if question == nil then
 			return
@@ -107,8 +108,14 @@ local function ask_and_start(chosen, ctx, root)
 				base = base,
 				ctx = ctx,
 				root = root,
+				into = into,
 				isolate = isolate,
 			})
+		end
+		-- A worktree that already exists answers both questions below: it has a
+		-- name, and it is already cut from wherever it was cut from.
+		if into then
+			return go(into.name, nil)
 		end
 		if not isolate or not root then
 			return go(nil, nil)
@@ -141,12 +148,17 @@ end
 ---   question  what to ask, may be empty
 ---   ctx       from agent_context.here(), plus an optional prebuilt text
 ---   isolate   give it a worktree of its own
+---   into      a worktree that already exists: { dir, branch, name, base }
 function M.start(opts)
 	local root = opts.root or worktree.repo()
 	local name = opts.name or name_for(opts.question, opts.cli)
 	local cwd, branch, base = vim.fn.getcwd(), nil, nil
 
-	if opts.isolate then
+	if opts.into then
+		-- Sending an agent into work that is already there, which is how a
+		-- worktree whose agent has gone gets picked back up.
+		cwd, branch, base = opts.into.dir, opts.into.branch, opts.into.base
+	elseif opts.isolate then
 		if not root then
 			vim.notify("agent: not a git repository, running here instead", vim.log.levels.WARN)
 		else
@@ -192,8 +204,9 @@ function M.start(opts)
 end
 
 --- The dialog. `visual` says the mapping came from a selection, which decides
---- what gets sent along without asking.
-function M.show(visual)
+--- what gets sent along without asking. `into` is a worktree that already
+--- exists, which the dashboard passes when the cursor is on one.
+function M.show(visual, into)
 	local available = cli.available()
 	if #available == 0 then
 		vim.notify("agent: none of claude, codex or grok are installed", vim.log.levels.WARN)
@@ -219,10 +232,11 @@ function M.show(visual)
 	end
 
 	set_hl()
-	local footer = (" <CR> start   <C-w> %s   <Esc> close "):format(isolate and "run here instead" or "give it a worktree")
+	local footer = into and (" <CR> start in %s   <Esc> close "):format(into.name)
+		or (" <CR> start   <C-w> %s   <Esc> close "):format(isolate and "run here instead" or "give it a worktree")
 
 	picker.open({
-		title = "Start an agent",
+		title = into and ("Start an agent in " .. into.name) or "Start an agent",
 		items = available,
 		columns = function(item)
 			return {
@@ -236,7 +250,7 @@ function M.show(visual)
 		footer = footer,
 		actions = {
 			["<CR>"] = function(item)
-				ask_and_start(item, ctx, root)
+				ask_and_start(item, ctx, root, into)
 			end,
 		},
 		commands = {
@@ -246,7 +260,7 @@ function M.show(visual)
 			["<C-w>"] = function()
 				isolate = not isolate
 				vim.schedule(function()
-					M.show(visual)
+					M.show(visual, into)
 				end)
 			end,
 		},

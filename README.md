@@ -181,7 +181,8 @@ working, which is waiting on you and which has finished.
 
 On the dashboard, `<CR>` opens that agent's terminal through the same window
 overlay `<leader>f` uses, `i` types a line to it without leaving, `a` starts
-another, `s` stops one and `x` forgets one that has exited.
+another, `s` stops one and `x` drops one: an agent that has exited is forgotten,
+a worktree is removed. The keys are in the window bar, so the list stays a list.
 
 ### Getting to one
 
@@ -244,6 +245,28 @@ completing one is how you deliberately send a second agent into an existing
 worktree, and the base against every branch and tag. `agent/` branches are left
 out of that list, since basing new work on another agent's unreviewed work is
 rarely what you meant.
+
+### The worktrees, after the agent
+
+The dashboard lists this project's worktrees too, so a row is a piece of work
+rather than a process: with an agent on it, or waiting for one. An agent dies
+when Neovim quits and its checkout does not, and a list of only what is running
+would quietly lose track of a dozen of them holding real work.
+
+A worktree with nobody in it reads `no agent`, with its branch and what has
+changed in it since it left yours. That last number is measured from where the
+two branches parted, so it stays right after you have carried on committing in
+the checkout you are sitting in.
+
+On such a row, `<CR>` opens the worktree itself in the file browser, `a` starts
+an agent in it without asking for a name or a base, and `x` removes it. Removal
+asks first, and asks separately about the branch, which is the only remaining
+copy of anything the agent committed there; git's own refusal to discard
+uncommitted work is passed back as a second question rather than worked around.
+
+Forgetting an agent that has exited leaves its worktree behind as a row of its
+own, which is the point: dropping the process and dropping the work are
+different decisions, and the second is better made looking at what the work was.
 
 ### What a new worktree needs
 
