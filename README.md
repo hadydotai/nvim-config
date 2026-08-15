@@ -30,7 +30,7 @@ covers the things that need explaining rather than listing.
 | `lua/agent_spawn.lua` | `<leader>aa`, starting one and feeding it context   |
 | `lua/agent_dash.lua` | `<leader>ad`, the dashboard buffer                   |
 | `lua/agent_sidebar.lua` | `<leader>ae`, the same thing as a column          |
-| `lua/agent_worktree.lua` | a git worktree per agent, so two cannot collide |
+| `lua/agent_worktree.lua` | `<leader>an`, worktrees: making, choosing and removing one |
 | `lua/agent_store.lua` | the agents you have run, so one can be resumed later |
 | `lua/agent_project.lua` | `<leader>aw`, what a new worktree needs to build |
 | `lua/agent_tree.lua` | picking that from the project tree rather than typing it |
@@ -178,6 +178,7 @@ working, which is waiting on you and which has finished.
 | `<leader>ac` | send this file, line, selection or its diagnostics to one already running |
 | `<leader>ad` | the dashboard |
 | `<leader>ae` | the sidebar, a column narrow enough to leave open |
+| `<leader>an` | make a worktree, with or without an agent to put in it |
 | `<leader>aw` | the worktree setup for this project |
 
 On the dashboard, `<CR>` opens that agent's terminal through the same window
@@ -228,25 +229,35 @@ run.
 An agent that fires no hooks is still tracked as running or exited, because the
 process is Neovim's own child. `:Agents check` says which are wired.
 
-### A worktree each
+### Worktrees, and agents in them
 
-An agent gets a git worktree of its own, on a branch named after what you asked
-it, under `.data/` where it is gitignored. `<C-w>` in the dialog runs it in the
-current checkout instead.
+An agent runs in the checkout you are sitting in. `<C-w>` in the dialog offers
+the places instead: a worktree this project already has, or a new one.
 
-The isolation is not fussiness. Two agents editing one checkout do not take
-turns and neither knows the other exists, so the second overwrites the first
-and the diff you read afterwards is neither of them. Separate worktrees also
-mean the diff column on the dashboard is that agent's work and nothing else,
-which is why it is only shown for a run that has one.
+Worktrees are made on their own, with `<leader>an` or `n` on the dashboard, and
+one holds as many agents as you send into it. They used to be made one per
+agent, on the way to starting it, which is wasteful, because most questions do
+not need a checkout of their own; slow, because the checkout and everything the
+project needs copied into it were paid for before the agent had said a word;
+and wrong about half the time, because plenty of work belongs where you already
+are.
 
-Starting one asks for the name and what to cut it from, both prefilled with the
-answer you would have got anyway, so the usual path is two more presses of
-enter. Both complete: the name against worktrees this project already has, so
-completing one is how you deliberately send a second agent into an existing
-worktree, and the base against every branch and tag. `agent/` branches are left
-out of that list, since basing new work on another agent's unreviewed work is
-rarely what you meant.
+The isolation is still the point when you want it. Two agents editing one
+checkout do not take turns and neither knows the other exists, so the second
+overwrites the first and the diff you read afterwards is neither of them.
+Separate worktrees also mean the diff column on the dashboard is that
+worktree's work and nothing else, which is why it is not shown for an agent
+running in your own checkout: there it would be reporting your uncommitted work
+as the agent's.
+
+Making one asks for the name and what to cut it from, both prefilled with the
+answer you would have got anyway, so the usual path is two presses of enter.
+Both complete: the name against worktrees this project already has, so typing
+one is how you say "the one I already have", and the base against every branch
+and tag. `agent/` branches are left out of that list, since basing new work on
+another agent's unreviewed work is rarely what you meant. They live under
+`.data/`, where they are gitignored, and the checkout itself happens in the
+background: a large repository takes seconds, and nothing is waiting on it.
 
 ### The worktrees, after the agent
 
@@ -262,7 +273,7 @@ two branches parted, so it stays right after you have carried on committing in
 the checkout you are sitting in.
 
 On such a row, `<CR>` opens the worktree itself in the file browser, `a` starts
-an agent in it without asking for a name or a base, and `x` removes it. Removal
+an agent in it without asking where, and `x` removes it. Removal
 asks first, and asks separately about the branch, which is the only remaining
 copy of anything the agent committed there; git's own refusal to discard
 uncommitted work is passed back as a second question rather than worked around.

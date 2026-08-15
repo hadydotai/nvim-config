@@ -1,4 +1,4 @@
--- Starting an agent: which one, where it works, and what you are asking.
+-- Starting an agent: which one, and what you are asking it.
 --
 -- Two steps and no more. The agent is a keypress from the same dialog
 -- everything else uses, and the question is one line of input. What you are
@@ -7,8 +7,15 @@
 -- Asking would be a third dialog to answer the question you had already
 -- answered by putting the cursor somewhere.
 --
+-- Where it runs is not asked either. It runs here, in the checkout you are
+-- sitting in, which is what you meant most of the time and costs nothing. When
+-- it is not what you meant, <C-w> offers the places: a worktree you have, or a
+-- new one. Making that worktree is agent_worktree.lua's job, not this file's -
+-- a checkout is worth having on its own, and worth keeping for the next agent
+-- rather than cut fresh for every question.
+--
 --   <leader>aa   start one, on the file or the selection
---   <C-w>        in the dialog, toggle between a worktree of its own and here
+--   <C-w>        in the dialog, somewhere other than here
 
 local M = {}
 
@@ -17,10 +24,6 @@ local cli = require("agent_cli")
 local context = require("agent_context")
 local picker = require("picker")
 local worktree = require("agent_worktree")
-
--- Sticky across dialogs within a session: having chosen to work in the current
--- checkout once, being asked again on the next spawn is noise.
-local isolate = true
 
 local function set_hl()
 	vim.api.nvim_set_hl(0, "AgentName", { link = "Normal", default = true })
@@ -37,108 +40,18 @@ local function name_for(question, cli_name)
 	return slug
 end
 
---- Branches and tags, for completing where a worktree is cut from and for
---- noticing that the name you are typing is one that already exists.
-function _G._agent_refs(lead)
-	local root = worktree.repo()
-	if not root then
-		return {}
-	end
-	local out = vim.system({
-		"git",
-		"for-each-ref",
-		"--format=%(refname:short)",
-		"refs/heads",
-		"refs/remotes",
-		"refs/tags",
-	}, { cwd = root, text = true }):wait()
-
-	local seen, refs = {}, {}
-	for line in (out.stdout or ""):gmatch("[^\n]+") do
-		-- The agent/ branches are ours, and offering one back as a base is a
-		-- way to build a worktree on top of another agent's unreviewed work.
-		if not seen[line] and not line:match("^agent/") then
-			seen[line] = true
-			refs[#refs + 1] = line
-		end
-	end
-	table.sort(refs)
-	return vim.tbl_filter(function(ref)
-		return ref:find(lead, 1, true) == 1
-	end, refs)
-end
-
---- Names already taken by a worktree of this project, so completing one is how
---- you send a second agent into an existing worktree on purpose.
-function _G._agent_names(lead)
-	local root = worktree.repo()
-	local names = {}
-	for _, dir in ipairs(root and worktree.list(root) or {}) do
-		names[#names + 1] = vim.fn.fnamemodify(dir, ":t")
-	end
-	table.sort(names)
-	return vim.tbl_filter(function(name)
-		return name:find(lead, 1, true) == 1
-	end, names)
-end
-
---- Ask the question, then the name and base if it is getting a worktree of its
---- own, then start.
----
---- The name and base are asked rather than derived because where the work goes
---- is a decision, and one that is painful to discover you got wrong an hour
---- later. Both are prefilled with the answer you would have got anyway, so the
---- common path is two more presses of enter, and both complete: the name
---- against worktrees this project already has, the base against every branch
---- and tag.
-local function ask_and_start(chosen, ctx, root, into)
+--- Ask the question, then start. One dialog, because where it runs was either
+--- decided before this or is simply here.
+local function ask_and_start(chosen, ctx, place)
 	local subject = ctx.selection and ("selection " .. ctx.selection) or ctx.path or "no file"
-	local where = into and into.name or (isolate and "worktree" or "here")
+	local where = place and place.name or vim.fn.fnamemodify(vim.fn.getcwd(), ":t")
 	vim.ui.input({
 		prompt = ("%s (%s, %s): "):format(chosen.name, where, subject),
 	}, function(question)
 		if question == nil then
 			return
 		end
-		local function go(name, base)
-			M.start({
-				cli = chosen.name,
-				question = question,
-				name = name,
-				base = base,
-				ctx = ctx,
-				root = root,
-				into = into,
-				isolate = isolate,
-			})
-		end
-		-- A worktree that already exists answers both questions below: it has a
-		-- name, and it is already cut from wherever it was cut from.
-		if into then
-			return go(into.name, nil)
-		end
-		if not isolate or not root then
-			return go(nil, nil)
-		end
-		vim.ui.input({
-			prompt = "worktree name: ",
-			default = name_for(question, chosen.name),
-			completion = "customlist,v:lua._agent_names",
-		}, function(name)
-			if name == nil then
-				return
-			end
-			vim.ui.input({
-				prompt = "cut from: ",
-				default = "HEAD",
-				completion = "customlist,v:lua._agent_refs",
-			}, function(base)
-				if base == nil then
-					return
-				end
-				go(worktree.slug(name), vim.trim(base) ~= "" and vim.trim(base) or "HEAD")
-			end)
-		end)
+		M.start({ cli = chosen.name, question = question, ctx = ctx, place = place })
 	end)
 end
 
@@ -147,29 +60,10 @@ end
 ---   cli       which one
 ---   question  what to ask, may be empty
 ---   ctx       from agent_context.here(), plus an optional prebuilt text
----   isolate   give it a worktree of its own
----   into      a worktree that already exists: { dir, branch, name, base }
+---   place     where to run it: { dir, branch, name, base }, or nil for here
 function M.start(opts)
-	local root = opts.root or worktree.repo()
 	local name = opts.name or name_for(opts.question, opts.cli)
-	local cwd, branch, base = vim.fn.getcwd(), nil, nil
-
-	if opts.into then
-		-- Sending an agent into work that is already there, which is how a
-		-- worktree whose agent has gone gets picked back up.
-		cwd, branch, base = opts.into.dir, opts.into.branch, opts.into.base
-	elseif opts.isolate then
-		if not root then
-			vim.notify("agent: not a git repository, running here instead", vim.log.levels.WARN)
-		else
-			local dir, made, from, err = worktree.create(root, name, opts.base)
-			if not dir then
-				vim.notify("agent: " .. tostring(err) .. ", running here instead", vim.log.levels.WARN)
-			else
-				cwd, branch, base = dir, made, from
-			end
-		end
-	end
+	local place = opts.place
 
 	-- Built against the project root, so a path in the prompt reads the same
 	-- as one the agent will report back, even though it is working in a
@@ -177,11 +71,11 @@ function M.start(opts)
 	local body = opts.ctx and opts.ctx.text or ""
 	local run, err = agent.spawn({
 		cli = opts.cli,
-		cwd = cwd,
+		cwd = place and place.dir or vim.fn.getcwd(),
 		prompt = context.prompt(body, opts.question),
 		name = name,
-		label = branch,
-		base = base,
+		label = place and place.branch or nil,
+		base = place and place.base or nil,
 	})
 	if not run then
 		vim.notify("agent: " .. tostring(err), vim.log.levels.ERROR)
@@ -250,9 +144,10 @@ function M.resume(record)
 end
 
 --- The dialog. `visual` says the mapping came from a selection, which decides
---- what gets sent along without asking. `into` is a worktree that already
---- exists, which the dashboard passes when the cursor is on one.
-function M.show(visual, into)
+--- what gets sent along without asking. `place` is where it will run, which
+--- the dashboard passes when the cursor is on a worktree, and which <C-w>
+--- below is for the rest of the time.
+function M.show(visual, place)
 	local available = cli.available()
 	if #available == 0 then
 		vim.notify("agent: none of claude, codex or grok are installed", vim.log.levels.WARN)
@@ -278,11 +173,10 @@ function M.show(visual, into)
 	end
 
 	set_hl()
-	local footer = into and (" <CR> start in %s   <Esc> close "):format(into.name)
-		or (" <CR> start   <C-w> %s   <Esc> close "):format(isolate and "run here instead" or "give it a worktree")
+	local where = place and place.name or vim.fn.fnamemodify(vim.fn.getcwd(), ":t")
 
 	picker.open({
-		title = into and ("Start an agent in " .. into.name) or "Start an agent",
+		title = "Start an agent in " .. where,
 		items = available,
 		columns = function(item)
 			return {
@@ -293,20 +187,19 @@ function M.show(visual, into)
 		search = function(item)
 			return item.name .. " " .. item.label
 		end,
-		footer = footer,
+		footer = (" <CR> start in %s   <C-w> somewhere else   <Esc> close "):format(where),
 		actions = {
 			["<CR>"] = function(item)
-				ask_and_start(item, ctx, root, into)
+				ask_and_start(item, ctx, place)
 			end,
 		},
 		commands = {
-			-- Reopened rather than redrawn: the dialog has no notion of a
-			-- setting that changed, and reopening is one line and cannot
-			-- leave the two out of step.
+			-- Reopened rather than redrawn: the dialog has no notion of a place
+			-- that changed, and reopening is one line and cannot leave the two
+			-- out of step.
 			["<C-w>"] = function()
-				isolate = not isolate
-				vim.schedule(function()
-					M.show(visual, into)
+				worktree.choose(root, function(chosen)
+					M.show(visual, chosen.dir ~= vim.fn.getcwd() and chosen or nil)
 				end)
 			end,
 		},

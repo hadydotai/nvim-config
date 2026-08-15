@@ -81,7 +81,7 @@ local function keys(into)
 
 	map("a", function()
 		local item = dash.items()[vim.api.nvim_win_get_cursor(0)[1]]
-		local into = item
+		local place = item
 			and item.tree
 			and {
 				dir = item.tree.dir,
@@ -89,7 +89,7 @@ local function keys(into)
 				name = vim.fn.fnamemodify(item.tree.dir, ":t"),
 				base = item.tree.base,
 			}
-		require("agent_spawn").show(false, into)
+		require("agent_spawn").show(false, place)
 	end, "Start an agent, in this worktree when the cursor is on one")
 
 	map("q", M.close, "Close the sidebar")

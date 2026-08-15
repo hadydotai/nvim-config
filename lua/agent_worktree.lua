@@ -1,11 +1,23 @@
--- A git worktree per agent, so two of them working at once cannot overwrite
--- each other's edits.
+-- Worktrees: making one, choosing one, and taking one away.
 --
--- The alternative is letting every agent edit the checkout you are sitting in,
--- which is fine for one and quietly destructive for two: they do not take
--- turns, and neither of them knows the other exists. A worktree costs a
--- checkout and gives back the ability to run several and read the diffs
--- separately.
+-- These used to be made one per agent, on the way to starting it. That is
+-- wasteful, since most questions do not need a checkout of their own; it is
+-- slow, since the checkout and everything the project needs copied into it are
+-- paid for before the agent has said a word; and it is wrong about half the
+-- time, because plenty of work belongs in the checkout you are already sitting
+-- in.
+--
+-- So a worktree is a thing you make when you want one, and an agent is started
+-- in a place: here unless you say otherwise, or one of these when you do. One
+-- worktree can hold as many agents as you care to send into it.
+--
+--   <leader>an   make one
+--   n            the same, on the dashboard, beside the ones you have
+--
+-- The isolation is still the point when you want it. Two agents editing one
+-- checkout do not take turns and neither knows the other exists, so the second
+-- overwrites the first and the diff you read afterwards is neither of them.
+-- That is a reason to have worktrees, not a reason to make one every time.
 --
 -- By default they live under .data/, which is gitignored, so a few gigabytes of
 -- checkouts never reach a commit:
@@ -126,43 +138,13 @@ function M.forked(repo, dir, done)
 	end)
 end
 
---- Make a worktree for `name` on a new branch cut from HEAD.
+--- Put into a fresh checkout whatever the project needs in order to build.
 ---
---- Returns the path, the branch and the commit it was cut from, or nil and a
---- reason. The commit is worth keeping: it is the only honest answer to "what
---- has this agent changed" once it starts committing, and it stops being
---- derivable from the branch the moment anything else moves.
----
---- An existing worktree of the same name is reused rather than treated as an
---- error: asking twice for the same thing should give you the same thing.
-function M.create(repo, name, base)
-	if not repo then
-		return nil, nil, nil, "not a git repository"
-	end
-	local dir = M.dir(repo, name)
-	local branch = "agent/" .. name
-	local _, from = git({ "rev-parse", base or "HEAD" }, repo)
-
-	if vim.fn.isdirectory(dir) == 1 then
-		return dir, branch, from
-	end
-
-	vim.fn.mkdir(vim.fn.fnamemodify(dir, ":h"), "p")
-
-	-- An existing branch of this name means a previous run of the same name,
-	-- so check it out rather than failing on "already exists".
-	local exists = select(1, git({ "rev-parse", "--verify", "--quiet", branch }, repo))
-	local args = exists and { "worktree", "add", dir, branch }
-		or { "worktree", "add", "-b", branch, dir, base or "HEAD" }
-
-	local ok, _, err = git(args, repo)
-	if not ok then
-		return nil, nil, nil, err ~= "" and err or "git worktree add failed"
-	end
-
-	-- A checkout with none of the gitignored things the project needs is a
-	-- checkout that does not build, so the setup is part of creating one
-	-- rather than something to remember afterwards.
+--- A worktree with none of the gitignored things a project needs is a checkout
+--- that does not run, so this is part of making one rather than something to
+--- remember afterwards. What to put there is per project and lives in
+--- agent_project.lua.
+function M.furnish(repo, dir, name)
 	local project = require("agent_project")
 	local config = project.load(repo)
 	local _, failed = project.apply(repo, dir, config)
@@ -174,8 +156,52 @@ function M.create(repo, name, base)
 			vim.notify(("agent: %d setup command failed in %s"):format(broke, name), vim.log.levels.WARN)
 		end
 	end)
+end
 
-	return dir, branch, from
+--- Make a worktree for `name` on a new branch cut from `base`.
+---
+--- `done` is called with a place - `{ dir, branch, name, base }` - or with nil
+--- and a reason. The commit it was cut from is worth keeping: it is the only
+--- honest answer to "what has changed here" once the branch starts committing,
+--- and it stops being derivable the moment anything else moves.
+---
+--- An existing worktree of the same name is handed back rather than treated as
+--- an error: asking twice for the same thing should give you the same thing.
+---
+--- The checkout itself is asynchronous, because it is the slow part - a large
+--- repository takes seconds - and because nothing is waiting on it. The three
+--- calls around it are single reads of a ref and are not worth a callback.
+function M.create(repo, name, base, done)
+	if not repo then
+		return done(nil, "not a git repository")
+	end
+	local dir = M.dir(repo, name)
+	local branch = "agent/" .. name
+	local _, from = git({ "rev-parse", base or "HEAD" }, repo)
+	local place = { dir = dir, branch = branch, name = name, base = from ~= "" and from or nil }
+
+	if vim.fn.isdirectory(dir) == 1 then
+		return done(place)
+	end
+
+	vim.fn.mkdir(vim.fn.fnamemodify(dir, ":h"), "p")
+
+	-- An existing branch of this name means a previous worktree of the same
+	-- name, so check it out rather than failing on "already exists".
+	local exists = select(1, git({ "rev-parse", "--verify", "--quiet", branch }, repo))
+	local args = exists and { "git", "worktree", "add", dir, branch }
+		or { "git", "worktree", "add", "-b", branch, dir, base or "HEAD" }
+
+	vim.system(args, { cwd = repo, text = true }, function(out)
+		vim.schedule(function()
+			if out.code ~= 0 then
+				local err = vim.trim(out.stderr or "")
+				return done(nil, err ~= "" and err or "git worktree add failed")
+			end
+			M.furnish(repo, dir, name)
+			done(place)
+		end)
+	end)
 end
 
 --- Remove a worktree, and its branch too when asked.
@@ -251,5 +277,178 @@ function M.stat(dir, base, done)
 		)
 	end)
 end
+
+--------------------------------------------------------------------------- --
+-- choosing one, and making one on purpose
+--------------------------------------------------------------------------- --
+
+--- Branches and tags, for completing where a worktree is cut from and for
+--- noticing that the name you are typing is one that already exists.
+function _G._agent_refs(lead)
+	local root = M.repo()
+	if not root then
+		return {}
+	end
+	local out = vim.system({
+		"git",
+		"for-each-ref",
+		"--format=%(refname:short)",
+		"refs/heads",
+		"refs/remotes",
+		"refs/tags",
+	}, { cwd = root, text = true }):wait()
+
+	local seen, refs = {}, {}
+	for line in (out.stdout or ""):gmatch("[^\n]+") do
+		-- The agent/ branches are ours, and offering one back as a base is a
+		-- way to build a worktree on top of another agent's unreviewed work.
+		if not seen[line] and not line:match("^agent/") then
+			seen[line] = true
+			refs[#refs + 1] = line
+		end
+	end
+	table.sort(refs)
+	return vim.tbl_filter(function(ref)
+		return ref:find(lead, 1, true) == 1
+	end, refs)
+end
+
+--- Names already taken by a worktree of this project, so typing one is how you
+--- say "the one I already have" rather than making a second.
+function _G._agent_names(lead)
+	local root = M.repo()
+	local names = {}
+	for _, dir in ipairs(root and M.list(root) or {}) do
+		names[#names + 1] = vim.fn.fnamemodify(dir, ":t")
+	end
+	table.sort(names)
+	return vim.tbl_filter(function(name)
+		return name:find(lead, 1, true) == 1
+	end, names)
+end
+
+--- Ask for a name and a base, then make it. `done` gets the place, or nil if
+--- you backed out or it could not be made.
+---
+--- Both are asked rather than derived because where work goes is a decision,
+--- and one that is painful to discover you got wrong an hour later. Both are
+--- prefilled with the answer you would have got anyway, and both complete: the
+--- name against the worktrees this project has, the base against every branch
+--- and tag.
+function M.ask(repo, default, done)
+	done = done or function() end
+	if not repo then
+		vim.notify("agent: not a git repository", vim.log.levels.WARN)
+		return done(nil)
+	end
+	vim.ui.input({
+		prompt = "worktree name: ",
+		default = default,
+		completion = "customlist,v:lua._agent_names",
+	}, function(name)
+		if name == nil or vim.trim(name) == "" then
+			return done(nil)
+		end
+		vim.ui.input({
+			prompt = "cut from: ",
+			default = "HEAD",
+			completion = "customlist,v:lua._agent_refs",
+		}, function(base)
+			if base == nil then
+				return done(nil)
+			end
+			local slug = M.slug(name)
+			-- Said before the checkout starts rather than after, since the
+			-- checkout is the part that takes a while.
+			vim.notify("agent: making worktree " .. slug)
+			M.create(repo, slug, vim.trim(base) ~= "" and vim.trim(base) or "HEAD", function(place, err)
+				if not place then
+					vim.notify("agent: " .. tostring(err), vim.log.levels.ERROR)
+					return done(nil)
+				end
+				done(place)
+			end)
+		end)
+	end)
+end
+
+--- Where a worktree's branch parted from yours, filled in if it is missing.
+--- It is what a diff of the place has to be measured against, and the picker
+--- below does not have it: git lists worktrees, not fork points.
+local function with_base(repo, place, done)
+	if not place or place.base or not place.branch then
+		return done(place)
+	end
+	M.forked(repo, place.dir, function(base)
+		place.base = base
+		done(place)
+	end)
+end
+
+--- Pick a place: the checkout you are in, a worktree you already have, or a
+--- fresh one. `done` gets it, and is not called at all if you close the list.
+function M.choose(repo, done)
+	local cwd = vim.fn.getcwd()
+	M.trees(repo, nil, function(trees)
+		local items = {
+			{ name = vim.fn.fnamemodify(cwd, ":t"), dir = cwd, why = "the checkout you are in" },
+		}
+		for _, tree in ipairs(trees) do
+			if tree.dir ~= cwd then
+				items[#items + 1] = {
+					name = vim.fn.fnamemodify(tree.dir, ":t"),
+					dir = tree.dir,
+					branch = tree.branch,
+					why = tree.branch or tree.head or "",
+				}
+			end
+		end
+		items[#items + 1] = { make = true, name = "new worktree", why = "name it, and what to cut it from" }
+
+		require("picker").open({
+			title = "Where",
+			items = items,
+			columns = function(item)
+				return {
+					{ text = item.name, hl = item.make and "Comment" or "Normal" },
+					{ text = item.why, hl = "Comment" },
+				}
+			end,
+			search = function(item)
+				return item.name .. " " .. item.why
+			end,
+			footer = " <CR> work here   <Esc> close ",
+			actions = {
+				["<CR>"] = function(item)
+					if item.make then
+						return M.ask(repo, nil, function(place)
+							if place then
+								done(place)
+							end
+						end)
+					end
+					with_base(repo, item, done)
+				end,
+			},
+		})
+	end)
+end
+
+--- Make one from a keypress, with nothing to run in it yet. `done` is how the
+--- dashboard hears that its list has changed.
+function M.new(done)
+	M.ask(M.repo(), nil, function(place)
+		if place then
+			vim.notify(("agent: worktree %s on %s"):format(place.name, place.branch))
+		end
+		if done then
+			done(place)
+		end
+	end)
+end
+
+vim.keymap.set("n", "<leader>an", function()
+	M.new()
+end, { silent = true, desc = "Make a worktree, with or without an agent to put in it" })
 
 return M

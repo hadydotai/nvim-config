@@ -16,6 +16,7 @@
 --   <CR>   open it: the agent's terminal, or the directory it worked in
 --   i      type a line to that agent without leaving the dashboard
 --   a      start an agent, in that worktree when the cursor is on one
+--   n      make a worktree, with nothing in it yet
 --   r      resume the conversation this row remembers
 --   s      stop it
 --   x      drop it: forget an agent that has exited, remove a worktree
@@ -444,9 +445,9 @@ local function keys(into)
 
 	map("a", function()
 		local item = current()
-		-- On a worktree, the obvious meaning of "start one" is "here", and
-		-- having to retype a name you are looking at would be silly.
-		local into = item
+		-- On a worktree, the obvious meaning of "start one" is "in this one",
+		-- and having to pick a place you are looking at would be silly.
+		local place = item
 			and item.tree
 			and {
 				dir = item.tree.dir,
@@ -454,8 +455,16 @@ local function keys(into)
 				name = vim.fn.fnamemodify(item.tree.dir, ":t"),
 				base = item.tree.base,
 			}
-		require("agent_spawn").show(false, into)
+		require("agent_spawn").show(false, place)
 	end, "Start an agent, in this worktree when the cursor is on one")
+
+	map("n", function()
+		worktree.new(function(place)
+			if place then
+				refresh_trees(true)
+			end
+		end)
+	end, "Make a worktree, with nothing in it yet")
 
 	map("r", function()
 		local item = current()
@@ -541,7 +550,8 @@ function M.open(run)
 		-- In the winbar rather than the buffer, so what a row means and which
 		-- row you are on stay the same question: a legend on line one would put
 		-- every agent one line further down than the list says it is.
-		vim.wo[win].winbar = "%#AgentMeta# <CR> open   i say   a start   r resume   s stop   x drop   q close"
+		vim.wo[win].winbar =
+			"%#AgentMeta# <CR> open   i say   a start   n worktree   r resume   s stop   x drop   q close"
 	end
 	M.render(into, M.WIDE)
 
