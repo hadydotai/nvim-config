@@ -160,11 +160,30 @@ local function is_sidebar(win)
 	return lex ~= nil and vim.api.nvim_win_get_buf(win) == lex
 end
 
+--- Windows that may be taken over when there is no editing window at all.
+--- Wider than `targets`: netrw counts, because stock netrw replaces itself on
+--- <cr> and `nvim .` then opening something has always felt that way. Only the
+--- pinned sidebar is worth keeping.
+local function takeable(exclude)
+	local out = {}
+	for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+		if win ~= exclude and vim.api.nvim_win_get_config(win).relative == "" and not is_sidebar(win) then
+			out[#out + 1] = win
+		end
+	end
+	return out
+end
+
 --- Where "just open it, do not ask" goes: the window whoever is asking started
---- out in, else the one before that, else any other ordinary window. nil means
---- there is nowhere to put it and one has to be made.
-local function fallback(from, previous)
-	local wins = M.targets()
+--- out in, else the one before that, else any other ordinary window, else a
+--- directory listing to take over. nil means there is nowhere to put it and one
+--- has to be made.
+---
+--- `exclude` is for a caller that is itself a window: the dashboard must never
+--- answer "where should this go" with itself, and a `from` that is the
+--- dashboard is not a place to open anything.
+local function fallback(from, previous, exclude)
+	local wins = M.targets(exclude)
 	for _, win in ipairs({ from, previous }) do
 		if vim.tbl_contains(wins, win) then
 			return win
@@ -173,14 +192,11 @@ local function fallback(from, previous)
 	if wins[1] then
 		return wins[1]
 	end
-	-- Nothing but netrw on screen. A plain netrw window should just be taken
-	-- over, which is what stock netrw does with <cr> and what `nvim .` then
-	-- opening a file has always felt like. Only the pinned sidebar is worth
-	-- keeping, and that is the one case left with nowhere to put the file.
-	if from and vim.api.nvim_win_is_valid(from) and not is_sidebar(from) then
+	local over = takeable(exclude)
+	if from and vim.tbl_contains(over, from) then
 		return from
 	end
-	return nil
+	return over[1]
 end
 
 --- Focus `win`, or make an editing split when there is none. By the time this
@@ -198,23 +214,26 @@ end
 --- outlines a target unless there is only one, <s-cr> takes the obvious one
 --- without asking. `open(win, item)` does the opening and may get a nil window.
 --- Call this while building the picker, so it still sees where you came from.
-function M.actions(open)
+---
+--- `exclude` is a window that is not a candidate, for a caller that lives in a
+--- window of its own rather than in a float.
+function M.actions(open, exclude)
 	local from = vim.api.nvim_get_current_win()
 	local previous = vim.fn.win_getid(vim.fn.winnr("#"))
 	return {
 		["<CR>"] = function(item)
-			local wins = M.targets()
+			local wins = M.targets(exclude)
 			if #wins < 2 then
 				-- nothing to disambiguate, so <cr> is <s-cr>
-				return open(fallback(from, previous), item)
+				return open(fallback(from, previous, exclude), item)
 			end
-			local chosen = M.select(from, wins, fallback(from, previous))
+			local chosen = M.select(from, wins, fallback(from, previous, exclude))
 			if chosen then
 				open(chosen, item)
 			end
 		end,
 		["<S-CR>"] = function(item)
-			open(fallback(from, previous), item)
+			open(fallback(from, previous, exclude), item)
 		end,
 	}
 end

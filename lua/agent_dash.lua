@@ -419,14 +419,22 @@ local function keys(into)
 		vim.keymap.set("n", lhs, fn, { buffer = into, silent = true, nowait = true, desc = desc })
 	end
 
-	for lhs, fn in pairs(win_pick.actions(function(win, item)
-		M.show_in(item, win)
-	end)) do
+	-- Built at the keypress rather than once here, because it captures which
+	-- window you came from, and that is a different window every time. The
+	-- dashboard itself is excluded: it is a list, and an agent's terminal
+	-- opened into it is a list you no longer have. With nothing but a
+	-- directory listing beside it, that listing is what gets taken over,
+	-- exactly as opening a file from it would.
+	for _, lhs in ipairs({ "<CR>", "<S-CR>" }) do
 		map(lhs, function()
 			local item = current()
-			if item then
-				fn(item)
+			if not item then
+				return
 			end
+			local mine = vim.api.nvim_get_current_win()
+			win_pick.actions(function(win, chosen)
+				M.show_in(chosen, win)
+			end, mine)[lhs](item)
 		end, "Open this agent, or this worktree")
 	end
 

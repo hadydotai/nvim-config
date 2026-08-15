@@ -183,9 +183,14 @@ working, which is waiting on you and which has finished.
 
 On the dashboard, `<CR>` opens that agent's terminal through the same window
 overlay `<leader>f` uses, `i` types a line to it without leaving, `a` starts
-another, `r` resumes one you left behind, `s` stops one and `x` drops one: an
-agent that has exited is forgotten, a worktree is removed. The keys are in the
-window bar, so the list stays a list.
+another, `n` makes a worktree, `r` resumes one you left behind, `s` stops one
+and `x` drops one: an agent that has exited is forgotten, a worktree is
+removed. The keys are in the window bar, so the list stays a list.
+
+`<CR>` never opens into the dashboard itself, since a list with a terminal in
+it is a list you no longer have. With nothing beside it but a directory
+listing, that listing is what gets taken over, exactly as opening a file from
+it would.
 
 ### Getting to one
 
