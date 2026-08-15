@@ -18,6 +18,7 @@ covers the things that need explaining rather than listing.
 | `lua/deps.lua`       | what the machine needs, and how to get it per platform |
 | `lua/picker.lua`     | the modal filterable dialog `<leader>f/b/s/g/h` all use |
 | `lua/win_pick.lua`   | "which window should this open in", the outline overlay |
+| `lua/win_number.lua` | `<C-w>`, the panes numbered, `<C-w>2` to go there    |
 | `lua/pairs.lua`      | auto-closing brackets, quotes and docstring fences   |
 | `lua/diagnostics.lua` | the quickfix list of them, and the full text of one |
 | `lua/netrw_*.lua`    | the file tree: pinned sidebar, split picking, `%`    |
@@ -94,6 +95,24 @@ where a thing lands, through the same overlay:
 The netrw sidebar is never a candidate. Pressing either key from inside the
 tree opens into the editing area, and if the sidebar is the only window on
 screen a split is made rather than the tree being replaced.
+
+### Jumping to a window by its number
+
+`<C-w>` draws each window's number over it and waits. `1` to `9` goes to that
+window, the way tmux jumps to a pane; anything else is handed straight back to
+whatever `<C-w>` and that key already meant, so `<C-w>v`, `<C-w>j` and the rest
+are untouched, counts included.
+
+The numbers are Vim's own, from `winnr()`, so `<C-w>2` and `2<C-w>w` are the
+same window and the number over a pane is the one every other window command
+already means. A tenth window is left unlabelled rather than renumbered, since
+there is no second digit to press.
+
+Nothing is drawn when the next key is already waiting, so `<C-w>v` typed at
+speed does not flash a number over every window on the way past. Pausing is
+what asks for them, and pausing costs `timeoutlen` first: `<C-w>H` and the
+other two-key window commands are mappings of their own, and Vim waits to see
+which of the two you are typing before either can run.
 
 `<leader>f` lists files from `git ls-files --cached --others
 --exclude-standard` when there is a `.git`, so `.gitignore` is respected and

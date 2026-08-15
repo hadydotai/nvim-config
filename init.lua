@@ -10,6 +10,7 @@ require("netrw_pick").setup()
 require("netrw_sidebar").setup()
 require("netrw_tree").setup()
 require("keymap")
+require("win_number") -- after the netrw ones: it hands <C-w>H and friends back
 require("pairs")
 require("find")
 require("grep")
