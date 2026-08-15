@@ -274,8 +274,6 @@ function M.setup()
 	vim.g.Netrw_UserMaps = {
 		{ "<cr>", "NetrwPickChoose" },
 		{ "<s-cr>", "NetrwPickDefault" },
-		{ "<c-w>s", "NetrwPickSplit" },
-		{ "<c-w>v", "NetrwPickVsplit" },
 		{ "%", "NetrwPickNew" },
 	}
 
@@ -283,9 +281,28 @@ function M.setup()
 	require("keys").declare({
 		{ lhs = "<cr>", where = "netrw", desc = "Outline a target window, hjkl to move, <CR> to open there" },
 		{ lhs = "<s-cr>", where = "netrw", desc = "Open the file in the previous window (netrw's default)" },
-		{ lhs = "<c-w>s", where = "netrw", desc = "Open the file under the cursor in a new horizontal split" },
-		{ lhs = "<c-w>v", where = "netrw", desc = "Open the file under the cursor in a new vertical split" },
 		{ lhs = "%", where = "netrw", desc = "Create a file on disk, then choose where to open it" },
+	})
+
+	-- <c-w>s and <c-w>v are not in that list, and are registered with
+	-- win_number instead: a buffer-local mapping that starts with <c-w> would
+	-- make the prefix ambiguous again in this buffer alone, which is the pane
+	-- numbers appearing a second late in the file tree and nowhere else.
+	vim.api.nvim_create_autocmd("FileType", {
+		group = vim.api.nvim_create_augroup("NetrwPickWindows", { clear = true }),
+		pattern = "netrw",
+		callback = function(ev)
+			local win_number = require("win_number")
+			for key, cmd in pairs({ s = "split", v = "vsplit" }) do
+				win_number.on_buffer(ev.buf, key, function()
+					-- Asked of the buffer rather than assumed, so browsing over
+					-- scp:// opens the same way browsing a directory does.
+					M.split_open(vim.b[ev.buf].netrw_islocal or 1, cmd)
+				end, ("Open the file under the cursor in a new %s split"):format(
+					cmd == "split" and "horizontal" or "vertical"
+				))
+			end
+		end,
 	})
 end
 

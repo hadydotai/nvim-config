@@ -10,7 +10,6 @@ require("netrw_pick").setup()
 require("netrw_sidebar").setup()
 require("netrw_tree").setup()
 require("keymap")
-require("win_number") -- after the netrw ones: it hands <C-w>H and friends back
 require("pairs")
 require("find")
 require("grep")
@@ -26,3 +25,4 @@ require("lspstatus").setup()
 require("statusline")
 require("title")
 require("markdown")
+require("win_number") -- last: it takes over every <C-w> mapping set above

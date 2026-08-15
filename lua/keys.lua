@@ -63,6 +63,11 @@ local function normalise(lhs)
 			rest = named
 		elseif rest:lower():match("^f%d+$") then
 			rest = rest:upper()
+		elseif mods:find("C%-") and #rest == 1 then
+			-- Control takes no notice of case, so <c-r> and <C-R> are one key
+			-- and have to be spelled one way, or deleting the mapping made
+			-- under one spelling leaves the other in the list.
+			rest = rest:upper()
 		end
 		return "<" .. mods .. rest .. ">"
 	end))

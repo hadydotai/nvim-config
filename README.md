@@ -98,21 +98,30 @@ screen a split is made rather than the tree being replaced.
 
 ### Jumping to a window by its number
 
-`<C-w>` draws each window's number over it and waits. `1` to `9` goes to that
-window, the way tmux jumps to a pane; anything else is handed straight back to
-whatever `<C-w>` and that key already meant, so `<C-w>v`, `<C-w>j` and the rest
-are untouched, counts included.
+`<C-w>` puts a large number over every window, at once, and `1` to `9` goes to
+that one, the way tmux jumps to a pane. Anything else is what it always was, so
+`<C-w>v`, `<C-w>j`, `<C-w>H` and the rest are untouched, counts included.
 
 The numbers are Vim's own, from `winnr()`, so `<C-w>2` and `2<C-w>w` are the
 same window and the number over a pane is the one every other window command
 already means. A tenth window is left unlabelled rather than renumbered, since
-there is no second digit to press.
+there is no second digit to press. Nothing is drawn when the next key is
+already waiting, so `<C-w>v` typed at speed does not flash a number over every
+window on the way past.
 
-Nothing is drawn when the next key is already waiting, so `<C-w>v` typed at
-speed does not flash a number over every window on the way past. Pausing is
-what asks for them, and pausing costs `timeoutlen` first: `<C-w>H` and the
-other two-key window commands are mappings of their own, and Vim waits to see
-which of the two you are typing before either can run.
+`lua/win_number.lua` owns the whole prefix, and has to. The numbers have to
+appear while Vim waits for the second key of `<C-w>`, and Vim does not repaint
+in that state: it is waiting on input rather than running a loop, so a float
+created there - from `vim.on_key`, from a timer, from anything - exists and
+never reaches the screen. `:redraw!` and `nvim__redraw{flush=true}` were both
+tried against a real terminal, and neither pushes a frame out.
+
+A mapping does paint, because it runs, but only fires at once when nothing
+longer starts with it. So every other `<C-w>` mapping is taken over at startup
+and deleted: the callback that ran before is the callback that runs now,
+reached from the same key, and `<leader>h` still lists them. Had `<C-w>H`
+stayed a mapping of its own, Vim would have sat out `timeoutlen` before either
+could run, and the numbers would have arrived a second late.
 
 `<leader>f` lists files from `git ls-files --cached --others
 --exclude-standard` when there is a `.git`, so `.gitignore` is respected and
