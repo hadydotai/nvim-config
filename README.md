@@ -33,6 +33,7 @@ covers the things that need explaining rather than listing.
 | `lua/agent_sidebar.lua` | `<leader>ae`, the same thing as a column          |
 | `lua/agent_worktree.lua` | `<leader>an`, worktrees: making, choosing and removing one |
 | `lua/agent_store.lua` | the agents you have run, so one can be resumed later |
+| `lua/agent_scroll.lua` | scrolling back: the agent's own history, its own keys |
 | `lua/agent_project.lua` | `<leader>aw`, what a new worktree needs to build |
 | `lua/agent_tree.lua` | picking that from the project tree rather than typing it |
 | `lua/agent_context.lua` | the file, line or selection an agent is asked about |
@@ -390,16 +391,51 @@ Agents are children of this Neovim, so quitting ends them. A tmux pane would
 survive and this does not; if that matters, the agent is a normal CLI and
 running it in a terminal remains the way to outlive the editor.
 
-There is no scrollback worth the name in an agent's terminal, and it is not a
-setting you are missing. Codex and grok are started with `--no-alt-screen`, so
-they draw inline and what is on screen when they exit stays in the buffer;
-claude has no such flag and takes over the alternate screen, where by definition
-nothing is kept. But all three are full-screen programs that repaint in place
-rather than letting lines scroll off, so none of them fills a terminal buffer's
-history the way a command that prints and stops would. Measured: 200 lines of
-`seq` land in the buffer as 201 lines, and an agent's answer of the same length
-leaves it at exactly one screen. `<C-\><C-n>` gets you to normal mode either
-way, but paging back through the conversation is the agent's own job.
+There is no scrollback in an agent's terminal buffer, and it is not a setting
+you are missing. Codex and grok are started with `--no-alt-screen`, so what is
+on screen when they exit stays in the buffer; claude has no such flag and takes
+the alternate screen, where by definition nothing is kept. But all three are
+full-screen programs that repaint in place rather than letting lines scroll off,
+so none of them fills a terminal buffer's history the way a command that prints
+and stops would. Measured: 200 lines of `seq` land in the buffer as 201 lines,
+and an agent's answer of the same length leaves it at exactly one screen.
+
+Scrolling back is therefore the agent's own job, and `lua/agent_scroll.lua` is
+how it is asked. See below.
+
+### Scrolling back through what it said
+
+In an agent's terminal, `<C-\><C-n>` and then the keys you would scroll any
+buffer with:
+
+| key | |
+| --- | --- |
+| `<C-u>` `<C-d>` | half a screen |
+| `<C-b>` `<C-f>`, `<PageUp>` `<PageDown>` | a screen |
+| `k` `j` | a line, where the agent has a key for one |
+| `gg` `G` | the top, the bottom |
+| `q` `<Esc>` | back to the conversation |
+
+None of that scrolls the buffer, because there is nothing in it to scroll. Each
+key is sent to the agent, which scrolls its own history: claude keeps it in a
+view of its own that `ctrl-o` opens, codex the same on `ctrl-/`, and grok
+scrolls the screen it is already showing. Opening that view is the first
+scroll's job, and typing closes it again - `i`, `<CR>` from the dashboard,
+anything that puts you back in the terminal - so you are never left with your
+keystrokes going into a pager.
+
+Terminal insert mode is untouched: it already sends every key straight through,
+so an agent's own scrolling has always worked there. It was normal mode, where
+these keys mean "scroll the buffer" and the buffer is one screen tall, that had
+nothing to offer.
+
+Which keys each CLI takes is in `lua/agent_cli.lua`, since that is the file that
+knows what the CLIs are. Claude's were measured against 2.1.233 by filling its
+screen with 120 numbered lines and reading back what moved; grok's `ctrl-u` and
+`ctrl-d` the same way. Codex's were read from its own keymap rather than
+measured, because it draws part of its screen as an image that a terminal
+emulator built for reading text back cannot see. A key a CLI does not want is a
+key it ignores, so the cost of that guess being wrong is nothing happening.
 
 ## Pairs
 

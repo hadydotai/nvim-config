@@ -238,6 +238,23 @@ local CLIS = {
 		-- And has no way to leave the alternate screen, so its terminal buffer
 		-- keeps nothing at all once it exits. See `inline`.
 		inline = false,
+		-- Its own history, and the keys that move through it. Claude keeps the
+		-- conversation in a view of its own rather than in the screen you are
+		-- looking at, so scrolling means opening that first: ctrl-o, then vim
+		-- keys, then q to come back. Measured against 2.1.233 by filling the
+		-- screen with 120 lines and reading what came back.
+		scroll = {
+			open = "\15", -- ctrl-o
+			close = "q",
+			up = "k",
+			down = "j",
+			half_up = "\21", -- ctrl-u
+			half_down = "\4", -- ctrl-d
+			page_up = "\2", -- ctrl-b
+			page_down = "\6", -- ctrl-f
+			top = "g",
+			bottom = "G",
+		},
 		-- A flag, so there is no home to mirror and nothing installed at all.
 		prepare = function(self)
 			local path = DATA .. "/claude-settings.json"
@@ -280,6 +297,24 @@ local CLIS = {
 		-- chosen (see resume_id below).
 		mints = false,
 		inline = true,
+		-- Codex has a transcript overlay of its own, on ctrl-/ - which is the
+		-- byte ctrl-_ - with a pager under it. Read from codex's own keymap
+		-- (tui.keymap.global.open_transcript) rather than measured: it paints
+		-- part of its screen as an image, which a terminal emulator built for
+		-- reading text back cannot see. The keys below are its pager defaults,
+		-- and a key it does not want is a key it ignores.
+		scroll = {
+			open = "\31", -- ctrl-/
+			close = "q",
+			up = "k",
+			down = "j",
+			half_up = "\21",
+			half_down = "\4",
+			page_up = "\27[5~",
+			page_down = "\27[6~",
+			top = "g",
+			bottom = "G",
+		},
 		prepare = function(self)
 			local home = DATA .. "/codex-home"
 			local ok, err = mirror(vim.env.HOME .. "/.codex", home, { "hooks.json" })
@@ -348,6 +383,17 @@ local CLIS = {
 		bin = "grok",
 		mints = true,
 		inline = true,
+		-- Grok scrolls the screen you are already looking at, so there is
+		-- nothing to open and nothing to close. ctrl-u and ctrl-d were measured
+		-- moving it; the line keys it documents are ctrl-j and ctrl-k, and
+		-- those are left out on purpose, since a ctrl-j that misses the pager
+		-- is a newline, and a newline in the composer is a prompt sent.
+		scroll = {
+			half_up = "\21",
+			half_down = "\4",
+			page_up = "\27[5~",
+			page_down = "\27[6~",
+		},
 		-- Grok has no settings flag, so the same mirror trick, with the hooks
 		-- appended to a copy of config.toml. Its own config is read rather
 		-- than linked so the copy keeps whatever you have set.
