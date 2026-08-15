@@ -108,10 +108,21 @@ end
 
 --- This project's worktrees, refreshed on a timer and kept by path, so the
 --- fork point and diff already worked out for one survive the next listing.
+---
+--- `generation` is what makes a forced refresh mean anything. Asking which row
+--- the cursor is on starts a listing, so pressing x on a worktree already has
+--- one in flight by the time the removal runs, and that listing was answered
+--- by a git that still had the worktree. Left to land it puts the row back for
+--- a whole TREES_EVERY, which reads as x having done nothing and invites a
+--- second x onto a worktree that is already gone.
 local trees, trees_at, trees_busy, known = {}, nil, false, {}
+local generation = 0
 
 local function refresh_trees(force)
-	if trees_busy then
+	-- A forced refresh goes ahead whatever is in flight. It is asked for when
+	-- something has just changed on disk, which is precisely when the listing
+	-- already running is the one that must not be believed.
+	if trees_busy and not force then
 		return
 	end
 	local now = os.time()
@@ -120,11 +131,22 @@ local function refresh_trees(force)
 	end
 	local root = repo()
 	if not root then
-		trees = {}
+		-- Nowhere to list. Anything in flight was about a repository we are no
+		-- longer in, so it is superseded by this rather than left to land.
+		generation = generation + 1
+		trees, trees_busy = {}, false
 		return
 	end
+	generation = generation + 1
+	local mine = generation
 	trees_at, trees_busy = now, true
 	worktree.trees(root, nil, function(found)
+		-- Superseded: something asked for a fresh listing after this one set
+		-- off, so this answer describes a state that has since been changed.
+		-- The listing that replaced it clears the flag.
+		if mine ~= generation then
+			return
+		end
 		trees_busy = false
 		local out = {}
 		for _, tree in ipairs(found) do
@@ -407,10 +429,21 @@ local function drop_tree(tree)
 		vim.notify("agent: " .. tostring(err), vim.log.levels.WARN)
 	end
 	known[tree.dir] = nil
+	-- Off the list now rather than whenever the next listing gets around to
+	-- saying so. The row stands for a directory that has just been deleted,
+	-- and a row you can still put the cursor on is a row you can still press x
+	-- on.
+	for i, one in ipairs(trees) do
+		if one.dir == tree.dir then
+			table.remove(trees, i)
+			break
+		end
+	end
 	-- The conversations were about work that no longer exists anywhere, and a
 	-- resume into a directory that is gone is not a resume.
 	require("agent_store").forget_dir(tree.dir)
 	refresh_trees(true)
+	agent.changed()
 	vim.notify("agent: removed " .. name)
 end
 
@@ -500,6 +533,8 @@ local function keys(into)
 		end
 		if item.session then
 			require("agent_store").forget(item.session.id)
+			-- Nothing about a run changed, so nothing else will say so.
+			agent.changed()
 			return
 		end
 		-- An agent first, its worktree second. Forgetting the run leaves the

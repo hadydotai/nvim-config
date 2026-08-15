@@ -46,6 +46,12 @@ local function changed()
 	end
 end
 
+--- Tell every view to repaint. Public because a run is not the only thing they
+--- show: worktrees and remembered conversations change without any run
+--- changing, and whoever made that change should not have to wait for the tick
+--- to have it appear.
+M.changed = changed
+
 --- Subscribe to any change in any run. Returns a function that unsubscribes.
 function M.watch(fn)
 	watchers[#watchers + 1] = fn
