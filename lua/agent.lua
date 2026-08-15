@@ -319,9 +319,6 @@ function M.spawn(opts)
 	-- is called by default, since this is the name <leader>b will show.
 	pcall(vim.api.nvim_buf_set_name, buf, ("agent://%s/%s"):format(adapter.name, run.name))
 	vim.b[buf].agent_run = run.id
-	-- The terminal buffer has no scrollback of its own to scroll, so the keys
-	-- that would scroll one ask the agent to scroll its own history instead.
-	require("agent_scroll").attach(run)
 
 	runs[run.id] = run
 	require("agent_store").record(run)
