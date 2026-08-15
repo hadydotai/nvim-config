@@ -322,7 +322,12 @@ function M.spawn(opts)
 
 	runs[run.id] = run
 	require("agent_store").record(run)
-	status(run, "working", "starting")
+	-- An agent handed a question is working on it before any hook can say so.
+	-- One that was not - a resume, or a start with nothing to ask yet - comes
+	-- up at its prompt waiting for you, and "starting" is then a state it never
+	-- leaves, since the first hook of a turn does not fire until you type.
+	local asked = run.prompt and vim.trim(run.prompt) ~= ""
+	status(run, asked and "working" or "idle", asked and "starting" or "ready")
 	listen()
 	changed()
 	return run

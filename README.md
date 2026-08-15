@@ -335,7 +335,9 @@ it: leave it alone for the default, or set a directory of your own, where
 
 An agent dies with the editor. Its conversation does not, and `r` on the
 dashboard starts the same agent again, in the same directory, resuming the same
-conversation.
+conversation. It comes up idle rather than working, because it was handed no
+question: the first hook of a turn does not fire until you type, and a row that
+says `starting` until then says it forever.
 
 That works because the name is ours. Claude and grok both accept a `--session-id`
 we mint before they start, so the conversation is known by an id we chose and
