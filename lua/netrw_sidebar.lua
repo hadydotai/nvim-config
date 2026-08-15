@@ -155,11 +155,41 @@ function M.window()
 	return sidebar()
 end
 
+--- Where the sidebar should come up.
+---
+--- :Lexplore with no argument browses the current buffer's own directory, which
+--- is right for a file and nonsense for anything else. A terminal is the case
+--- that bites: an agent's is named agent://claude/<name>, netrw resolves that
+--- against the working directory into a path that does not exist, and draws an
+--- empty window. So the directory is worked out here rather than left to netrw:
+--- the file's own if it has one, the agent's checkout if this is one of ours,
+--- and Neovim's otherwise.
+local function browse_dir()
+	local buf = vim.api.nvim_get_current_buf()
+
+	local id = vim.b[buf].agent_run
+	if id then
+		local ok, agent = pcall(require, "agent")
+		local run = ok and agent.get(id)
+		if run and vim.fn.isdirectory(run.cwd) == 1 then
+			return run.cwd
+		end
+	end
+
+	if vim.bo[buf].buftype == "" then
+		local dir = vim.fn.expand("%:p:h")
+		if dir ~= "" and vim.fn.isdirectory(dir) == 1 then
+			return dir
+		end
+	end
+	return vim.fn.getcwd()
+end
+
 --- Open the sidebar at the width it was meant to have, and return its window.
 --- Every caller goes through here rather than :Lexplore directly, so the
 --- sidebar comes up the same size whatever the layout was beforehand.
 function M.open()
-	vim.cmd("Lexplore")
+	vim.cmd("Lexplore " .. vim.fn.fnameescape(browse_dir()))
 	local side = sidebar()
 	if side then
 		pin(side, initial_width())
