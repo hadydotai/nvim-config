@@ -227,7 +227,8 @@ fail slowly; an RPC into a busy Neovim can, and the agent would sit on it until
 its own hook timeout gave up.
 
 Codex will not run a hook it has not been told to trust and asks once, in its
-own dialog, the first time you start it from here. Press `t`. Its answer is
+own dialog, the first time you start it from here. Choose "Trust all and
+continue" from its numbered menu and press enter. Its answer is
 remembered, which is the reason its mirrored home is kept rather than built per
 run.
 
