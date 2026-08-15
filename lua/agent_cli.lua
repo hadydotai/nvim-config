@@ -19,20 +19,24 @@
 --
 -- Two other things differ per CLI and so are decided here:
 --
---   the screen   codex and grok take --no-alt-screen, so they draw inline and
---                what is on screen when they exit stays in the buffer. claude
---                has no such flag and takes over the alternate screen, where
---                nothing survives it at all. `inline` says which. Neither is
---                scrollback: all three repaint in place rather than letting
---                lines scroll off, so the buffer never holds more than a
---                screen of the conversation whatever we pass
+--   the screen   all three are asked to draw inline rather than take the
+--                alternate screen, because the alternate screen has no
+--                scrollback in any terminal ever written, this one included:
+--                what the agent said would be gone as fast as it scrolled,
+--                and what is on screen when it exits would go with it. Drawn
+--                inline, the conversation scrolls off into the terminal
+--                buffer, where k and <C-u> read it back like any other text.
+--                codex and grok take --no-alt-screen; claude has no flag but
+--                honours CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN. `inline` says
+--                which, and is the reason none of them needs help scrolling
 --   the id       claude and grok accept a session id of our choosing, so a
 --                conversation can be resumed by a name we wrote down. codex
 --                mints its own, so its id is looked up by directory instead.
 --                `mints` says which
 --
--- Verified against claude 2.x, codex 0.147 and grok as installed: hooks fire,
--- grok's auth survives the mirror, and both --no-alt-screen flags exist.
+-- Verified against claude 2.1.233, codex 0.147 and grok as installed: hooks
+-- fire, grok's auth survives the mirror, both --no-alt-screen flags exist, and
+-- claude leaves the alternate screen alone when told to.
 
 local M = {}
 
@@ -235,9 +239,9 @@ local CLIS = {
 		bin = "claude",
 		-- Takes a session id of our choosing, so a run can be resumed by name.
 		mints = true,
-		-- And has no way to leave the alternate screen, so its terminal buffer
-		-- keeps nothing at all once it exits. See `inline`.
-		inline = false,
+		-- No flag for the alternate screen, but an environment variable for it.
+		-- See `inline` and env below.
+		inline = true,
 		-- A flag, so there is no home to mirror and nothing installed at all.
 		prepare = function(self)
 			local path = DATA .. "/claude-settings.json"
@@ -247,6 +251,16 @@ local CLIS = {
 			end
 			self.settings = path
 			return true
+		end,
+		-- Draw inline instead of taking the alternate screen, so the
+		-- conversation scrolls off into the terminal buffer and can be read
+		-- back there. claude's own issue tracker says this variable does not
+		-- exist, which was true of the version that filed it; it is honoured by
+		-- 2.1.233, measured by watching whether ESC[?1049h ever goes out.
+		-- Should a later version drop it, claude takes the alternate screen
+		-- again and nothing else here is affected.
+		env = function()
+			return { CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = "1" }
 		end,
 		argv = function(self, run)
 			local argv = { self.bin }

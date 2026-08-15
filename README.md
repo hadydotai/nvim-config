@@ -384,22 +384,26 @@ Verified against all three by starting one, closing it, and resuming: claude and
 grok recalled a word from the previous conversation through an id we minted,
 codex through one found by directory.
 
+### Reading back what it said
+
+All three are started drawing inline rather than on the alternate screen, so
+the conversation scrolls off into the terminal buffer and stays there.
+`<C-\><C-n>` and then `k`, `<C-u>`, `/` and `y` work on it as they would on any
+other text, and what is on screen when an agent exits is still there afterwards.
+
+Codex and grok take `--no-alt-screen`. Claude has no flag for it but honours
+`CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN`, which is set for it here. The
+alternate screen is the thing worth avoiding: it has no scrollback in any
+terminal emulator, so an agent drawing there leaves nothing behind at all.
+Measured on claude 2.1.233 in a 22-line window: on the alternate screen the
+buffer stays at 22 lines however much is said, and told not to take it, the
+same conversation grows past the window and can be scrolled.
+
 ### What it does not do
 
 Agents are children of this Neovim, so quitting ends them. A tmux pane would
 survive and this does not; if that matters, the agent is a normal CLI and
 running it in a terminal remains the way to outlive the editor.
-
-There is no scrollback worth the name in an agent's terminal, and it is not a
-setting you are missing. Codex and grok are started with `--no-alt-screen`, so
-they draw inline and what is on screen when they exit stays in the buffer;
-claude has no such flag and takes over the alternate screen, where by definition
-nothing is kept. But all three are full-screen programs that repaint in place
-rather than letting lines scroll off, so none of them fills a terminal buffer's
-history the way a command that prints and stops would. Measured: 200 lines of
-`seq` land in the buffer as 201 lines, and an agent's answer of the same length
-leaves it at exactly one screen. `<C-\><C-n>` gets you to normal mode either
-way, but paging back through the conversation is the agent's own job.
 
 ## Pairs
 
