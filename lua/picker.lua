@@ -28,11 +28,6 @@ local ns = vim.api.nvim_create_namespace("picker")
 --- second would have nowhere to put it.
 local view = nil
 
---- Every projected panel, by its list window. Unlike the modal these persist
---- and do not own focus, so there can be several, and one can be up while a
---- modal is open over it.
-local panels = {}
-
 local hl_group
 
 local function set_hl()
@@ -502,7 +497,6 @@ local function close(v)
 	if view == v then
 		view = nil
 	end
-	panels[v.list_win] = nil
 
 	pcall(vim.api.nvim_del_augroup_by_id, v.group)
 	if vim.api.nvim_get_mode().mode:sub(1, 1) == "i" then
@@ -1002,7 +996,6 @@ local function build(opts, seed, from)
 		was_buf = was_buf,
 		group = vim.api.nvim_create_augroup("PickerPanel" .. list_win, { clear = true }),
 	}
-	panels[list_win] = v
 
 	-- What it points at. The window the list came from is the obvious answer,
 	-- unless the panel has just taken that window over, in which case anywhere
