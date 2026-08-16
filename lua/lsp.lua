@@ -27,7 +27,17 @@ vim.api.nvim_create_autocmd("LspAttach", {
 	end,
 })
 
-vim.cmd("set completeopt+=noselect")
+-- Written out rather than appended to the default "menu,popup", because the
+-- default's "menu" is the reason a completion list looks broken: it draws the
+-- popup only when there is more than one match, so the list narrows as you
+-- type and then vanishes at exactly the point one candidate is left. gopls
+-- makes that constant, filtering server-side and going from 29 candidates to 3
+-- on the first letter after `fmt.`, and to one a few letters later.
+--
+-- "noinsert" over "noselect": the first match is highlighted so the list reads
+-- as a list you are moving through, and the popup documentation follows it,
+-- but nothing reaches the buffer until CTRL-Y accepts it.
+vim.o.completeopt = "menu,menuone,popup,noinsert"
 
 --------------------------------------------------------------------------- --
 -- keys
