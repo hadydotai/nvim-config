@@ -98,15 +98,13 @@ function M.show()
 		fuzzy = true,
 		min = { 2, 0, 11 }, -- no markers anywhere means no marker column
 		footer = win_pick.FOOTER,
-		-- built here rather than inside the picker, so it still sees the window
-		-- layout as it was before the float took focus
-		actions = win_pick.actions(function(win, item)
+		open = function(win, item)
 			if not vim.api.nvim_buf_is_valid(item.bufnr) then
 				return -- wiped out from under us while the list was open
 			end
 			win_pick.focus(win)
 			vim.cmd("buffer " .. item.bufnr)
-		end),
+		end,
 	})
 end
 

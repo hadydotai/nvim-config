@@ -143,12 +143,10 @@ function M.show()
 				unignore.edit(M.show)
 			end,
 		},
-		-- built here rather than inside the picker, so it still sees the window
-		-- layout as it was before the float took focus
-		actions = win_pick.actions(function(win, path)
+		open = function(win, path)
 			win_pick.focus(win)
 			vim.cmd("edit " .. vim.fn.fnameescape(path))
-		end),
+		end,
 	})
 end
 

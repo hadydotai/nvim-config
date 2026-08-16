@@ -8,25 +8,52 @@
 local M = {}
 
 local BORDER_HL = "DiagnosticWarn" -- change this to recolour the selection outline
+local SHOW_HL = "DiagnosticInfo" -- and this one for pointing rather than opening
 
 local overlay_win, overlay_buf
 
 local function set_hl()
 	vim.api.nvim_set_hl(0, "NetrwPickBorder", { link = BORDER_HL })
+	vim.api.nvim_set_hl(0, "WinPickShowBorder", { link = SHOW_HL })
 end
 
---- Ordinary windows a file could be opened into: no floats, and never netrw,
---- so the sidebar is not offered as a place to put a file.
---- `exclude` drops one more window, whatever it is.
+--- What the outline says and what colour it is. Opening something into a
+--- window and pointing a panel at one are different questions, and answering
+--- the wrong one is easy when they look the same.
+---
+--- U+00A0 rather than plain spaces: at winblend=100 a blank float cell is
+--- fully transparent and leaks the text underneath into the title.
+M.LOOK = {
+	open = { title = "\194\160open\194\160here\194\160", hl = "NetrwPickBorder" },
+	panel = { title = "\194\160panel\194\160here\194\160", hl = "NetrwPickBorder" },
+	show = { title = "\194\160show\194\160this\194\160", hl = "WinPickShowBorder" },
+}
+
+--- Windows that are UI rather than somewhere to put a file: the netrw tree,
+--- and either half of a projected list. A panel is a thing you read beside
+--- your work, so opening a file into one would take away the list that sent
+--- you to the file.
+local function furniture(win)
+	local ft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
+	return ft == "netrw" or ft == "picker" or ft == "pickerprompt"
+end
+
+--- Ordinary windows a file could be opened into: no floats, and nothing that
+--- is itself UI.
+--- `exclude` drops one more window, or several when given a list.
 function M.targets(exclude)
+	local skip = {}
+	if type(exclude) == "table" then
+		for _, win in ipairs(exclude) do
+			skip[win] = true
+		end
+	elseif exclude then
+		skip[exclude] = true
+	end
+
 	local out = {}
 	for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-		local buf = vim.api.nvim_win_get_buf(win)
-		if
-			win ~= exclude
-			and vim.api.nvim_win_get_config(win).relative == ""
-			and vim.bo[buf].filetype ~= "netrw"
-		then
+		if not skip[win] and vim.api.nvim_win_get_config(win).relative == "" and not furniture(win) then
 			out[#out + 1] = win
 		end
 	end
@@ -75,7 +102,7 @@ local function neighbour(from, dir, wins)
 	return best
 end
 
-local function show(win)
+local function show(win, look)
 	local cfg = {
 		relative = "win",
 		win = win,
@@ -86,15 +113,15 @@ local function show(win)
 		focusable = false,
 		style = "minimal",
 		border = "rounded",
-		-- U+00A0 rather than plain spaces: at winblend=100 a blank float cell is
-		-- fully transparent and leaks the text underneath into the title
-		title = "\194\160open\194\160here\194\160",
+		title = look.title,
 		title_pos = "center",
 		zindex = 250,
 		noautocmd = true,
 	}
+	local paint = ("FloatBorder:%s,FloatTitle:%s"):format(look.hl, look.hl)
 	if overlay_win and vim.api.nvim_win_is_valid(overlay_win) then
 		vim.api.nvim_win_set_config(overlay_win, cfg)
+		vim.wo[overlay_win].winhighlight = paint
 		return
 	end
 	if not (overlay_buf and vim.api.nvim_buf_is_valid(overlay_buf)) then
@@ -103,7 +130,7 @@ local function show(win)
 	overlay_win = vim.api.nvim_open_win(overlay_buf, false, cfg)
 	-- winblend keeps the interior see-through so only the outline reads as UI
 	vim.wo[overlay_win].winblend = 100
-	vim.wo[overlay_win].winhighlight = "FloatBorder:NetrwPickBorder,FloatTitle:NetrwPickBorder"
+	vim.wo[overlay_win].winhighlight = paint
 end
 
 local function hide()
@@ -122,8 +149,10 @@ end
 --- Modal loop: hjkl moves the outline, <cr> confirms, <esc>/q cancels.
 --- Returns the chosen window, or nil. `from` is where the movement starts out
 --- from, `start` the window to highlight first (default: the previous window,
---- which is what netrw would have opened into anyway).
-function M.select(from, wins, start)
+--- which is what netrw would have opened into anyway), and `look` what the
+--- outline says and what colour it is (default: opening something here).
+function M.select(from, wins, start, look)
+	look = look or M.LOOK.open
 	local selected = start or vim.fn.win_getid(vim.fn.winnr("#"))
 	if not vim.tbl_contains(wins, selected) then
 		selected = neighbour(from, "l", wins) or wins[1]
@@ -131,7 +160,7 @@ function M.select(from, wins, start)
 
 	local chosen
 	while true do
-		show(selected)
+		show(selected, look)
 		vim.cmd("redraw")
 		local ok, key = pcall(vim.fn.getcharstr)
 		if not ok then
@@ -162,12 +191,20 @@ end
 
 --- Windows that may be taken over when there is no editing window at all.
 --- Wider than `targets`: netrw counts, because stock netrw replaces itself on
---- <cr> and `nvim .` then opening something has always felt that way. Only the
---- pinned sidebar is worth keeping.
+--- <cr> and `nvim .` then opening something has always felt that way. The
+--- pinned sidebar and a projected list are the two worth keeping, being the
+--- two you arranged deliberately and would have to arrange again.
 local function takeable(exclude)
 	local out = {}
 	for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-		if win ~= exclude and vim.api.nvim_win_get_config(win).relative == "" and not is_sidebar(win) then
+		local ft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
+		if
+			win ~= exclude
+			and vim.api.nvim_win_get_config(win).relative == ""
+			and not is_sidebar(win)
+			and ft ~= "picker"
+			and ft ~= "pickerprompt"
+		then
 			out[#out + 1] = win
 		end
 	end
@@ -238,7 +275,7 @@ function M.actions(open, exclude)
 	}
 end
 
-M.FOOTER = " <CR> pick window   <S-CR> open here   <Esc> close "
+M.FOOTER = " <CR> pick window   <S-CR> open here   <C-o> panel   <Esc> close "
 
 function M.setup()
 	set_hl()

@@ -148,7 +148,7 @@ function M.show()
 			flex = 2,
 			footer = FOOTER,
 			query = search,
-			actions = win_pick.actions(function(win, hit)
+			open = function(win, hit)
 				if hit.file == "" then
 					return
 				end
@@ -156,7 +156,7 @@ function M.show()
 				vim.cmd("edit " .. vim.fn.fnameescape(hit.file))
 				pcall(vim.api.nvim_win_set_cursor, 0, { hit.lnum, math.max(0, hit.col - 1) })
 				vim.cmd("normal! zz")
-			end),
+			end,
 			commands = { ["<C-q>"] = to_quickfix },
 		})
 	end)

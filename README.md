@@ -96,6 +96,56 @@ The netrw sidebar is never a candidate. Pressing either key from inside the
 tree opens into the editing area, and if the sidebar is the only window on
 screen a split is made rather than the tree being replaced.
 
+### Keeping a list on screen
+
+`<C-o>` takes the list out of the float and puts it in a window, and `<C-o>`
+there puts it back. It is the same list: the rows, the query you had already
+typed and the row you were on all survive the move in both directions. What
+changes is that it stays, so a list can be something you work beside rather
+than something you dismiss to use what it told you.
+
+It goes where you point it. With more than one window the overlay comes up and
+`hjkl` picks the one to hand over; with only one it makes a vertical split to
+the right, so the file you are reading is not the thing that gets covered. A
+window it borrowed is given back when the panel closes, with the buffer that
+was in it, rather than closed out from under the layout you had.
+
+The panel has two halves and you use both without thinking about it. Insert
+mode is the prompt: type to narrow, `<C-n>`/`<C-p>` to move the selection,
+`<CR>` to act on it, all without leaving the prompt. Normal mode is the list
+itself, an ordinary buffer where `j`/`k` move, `/` searches and `y` yanks.
+
+| key | |
+| --- | --- |
+| type | narrow it |
+| `<C-n>`/`<C-p>`, `j`/`k` | move |
+| `<C-o>` | back to a float |
+| `q` | close |
+| `<Esc>` | out of the prompt, then out of the panel |
+
+What `<CR>` does depends on whether the list is about a window, which is the
+caller's business rather than the panel's:
+
+| | `<CR>` | `<S-CR>` | `r` |
+| --- | --- | --- | --- |
+| `<leader>s`, about one window | opens in that window | asks with the overlay | points it at another window |
+| `<leader>f`, `<leader>b`, `<leader>g`, `<leader>h` | asks with the overlay | opens in the window you came from | not offered |
+
+A file list is about the repository, not about whichever window you happen to
+be looking at, so it has nothing to be re-pointed at and no window a file
+obviously belongs in. Symbols do: the symbol came from a file that is open in
+a window, and putting it back there without asking is the whole point.
+
+`r` uses the same overlay as opening a file, in a different colour, because it
+is a different question: blue asks which window this list should be about,
+yellow asks where a file should land.
+
+`<leader>s` is the one that repays this most. Projected, it is an outline: it
+lists the symbols of the window it points at, follows along when you open
+something else there, and relists a moment after you stop typing. Lists that
+cannot say how to rebuild themselves keep what they were projected with, which
+is still a list worth having beside your work rather than in front of it.
+
 ### Jumping to a window by its number
 
 `<C-w>` puts a large number over every window, at once, and `1` to `9` goes to

@@ -112,6 +112,10 @@ local function collect(result, ctx, out, prefix, inside)
 				out[#out + 1] = {
 					kind = kind,
 					path = path,
+					-- Carried on the row rather than closed over, so a panel
+					-- pointed at another window jumps into that window's file
+					-- and not the one the list was first asked for.
+					buf = ctx.buf,
 					-- bytes of `path` that are the enclosing scope, dimmed on the
 					-- way out so the name itself still reads first
 					prefix_len = parent and (#parent + 1) or 0,
@@ -209,11 +213,18 @@ function M.show()
 			flex = 2, -- the path takes the leftover width, not the line number
 			min = { 6, 11, 3 },
 			footer = win_pick.FOOTER,
-			-- The request is async, but nothing has taken focus yet, so this
-			-- still sees the layout the user was looking at.
-			actions = win_pick.actions(function(win, item)
-				jump(buf, win, item)
-			end),
+			open = function(win, item)
+				jump(item.buf or buf, win, item)
+			end,
+			-- What a panel relists with. Projected beside a file, this is what
+			-- makes it an outline: point it at a window and it shows that
+			-- window's symbols, and keeps showing them as the file changes.
+			source = function(_, into, done)
+				if #vim.lsp.get_clients({ bufnr = into, method = "textDocument/documentSymbol" }) == 0 then
+					return done({})
+				end
+				request(into, done)
+			end,
 		})
 	end)
 end
@@ -335,7 +346,7 @@ function M.workspace()
 			max = { [3] = WHERE_WIDTH },
 			footer = win_pick.FOOTER,
 			query = search,
-			actions = win_pick.actions(ws_jump),
+			open = ws_jump,
 		})
 	end)
 end
