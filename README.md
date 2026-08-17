@@ -9,6 +9,38 @@ machines.
 file and line each one came from. That is the authoritative list; this file
 covers the things that need explaining rather than listing.
 
+`<leader>H` is the guide: the same material as this README, written for someone
+with the editor already open rather than for someone deciding whether to read
+the code.
+
+## The guide, and the way in
+
+Opened with nothing to open, Neovim shows its own intro screen, which is a
+donation appeal and a list of help topics for an editor you have already
+configured. `lua/start.lua` replaces it with the name of the place, the
+directory you are in, and ten keys worth having in front of you.
+
+The keys it draws are the real mappings rather than a menu of its own. A start
+screen that invents single-letter shortcuts teaches you keys that stop working
+the moment you open a file, so this one maps nothing at all: everything on it
+works there because it works everywhere, and reading it is practice. It appears
+only when nvim was given nothing else to do, and it is wiped the instant its
+window shows anything, so it never needs dismissing.
+
+`<leader>H` opens the guide in a tab of its own: fifteen sections, in the order
+you would want to learn them, drawn by the same markdown renderer `<leader>p`
+uses. `<CR>` on a line of the contents jumps to that section, `]]` and `[[`
+move between them, `q` closes it.
+
+The guide checks itself every time it is opened. Each key it names is looked up
+in the registry `lua/keys.lua` keeps, so one that has been renamed or removed
+is drawn as `(nothing maps this any more)` rather than left standing as a
+sentence that is quietly false. The last section is the other direction:
+everything this configuration maps that no section mentions, which today reads
+"Nothing". A document living in the same repository as the thing it describes
+should not be able to drift from it in silence, and both halves are tested by
+taking a mapping away and by adding one nobody wrote up.
+
 ## Layout
 
 | path                 | what it is                                          |
@@ -16,6 +48,9 @@ covers the things that need explaining rather than listing.
 | `init.lua`           | the load order, and nothing else                     |
 | `lua/paths.lua`      | redirects everything Neovim writes into this directory |
 | `lua/deps.lua`       | what the machine needs, and how to get it per platform |
+| `lua/keys.lua`       | `<leader>h`, and the registry of every mapping we set |
+| `lua/guide.lua`      | `<leader>H`, the guide, checked against that registry |
+| `lua/start.lua`      | what you see when nvim is opened with nothing to open |
 | `lua/picker.lua`     | the modal filterable dialog `<leader>f/b/s/g/h` all use |
 | `lua/win_pick.lua`   | "which window should this open in", the outline overlay |
 | `lua/win_number.lua` | `<C-w>`, the panes numbered, `<C-w>2` to go there    |
@@ -31,6 +66,7 @@ covers the things that need explaining rather than listing.
 | `lua/agent_spawn.lua` | `<leader>aa`, starting one and feeding it context   |
 | `lua/agent_dash.lua` | `<leader>ad`, the dashboard buffer                   |
 | `lua/agent_sidebar.lua` | `<leader>ae`, the same thing as a column          |
+| `lua/agent_review.lua` | `<leader>ar`, the diff an agent made, and `o` to answer a hunk |
 | `lua/agent_worktree.lua` | `<leader>an`, worktrees: making, choosing and removing one |
 | `lua/agent_store.lua` | the agents you have run, so one can be resumed later |
 | `lua/agent_project.lua` | `<leader>aw`, what a new worktree needs to build |

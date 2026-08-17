@@ -26,4 +26,6 @@ require("lspstatus").setup()
 require("statusline")
 require("title")
 require("markdown")
+require("guide") -- reads the key registry when opened, so load order is free
+require("start")
 require("win_number") -- last: it takes over every <C-w> mapping set above

@@ -150,6 +150,29 @@ function M.untracked(mode, lhs, rhs, opts)
 	return raw.set(mode, lhs, rhs, opts)
 end
 
+--- One spelling for a key, so a caller comparing against list() compares
+--- against the same string this recorded.
+M.normalise = normalise
+
+--- The record for one mapping, or nil when nothing has claimed that key.
+---
+--- Looked up through normalise() rather than compared literally, so a caller
+--- can write <C-w>s the way it reads and still find the <C-W>s that got
+--- recorded. `where` is "" for a global mapping, matching what list() reports.
+---
+--- This is what lets guide.lua check itself: a sentence in the guide naming a
+--- key nothing maps any more is a sentence that has quietly become false, and
+--- the only way to notice is to ask.
+function M.lookup(lhs, where)
+	local want = normalise(lhs)
+	for _, rec in ipairs(records) do
+		if not rec.deleted and rec.lhs == want and rec.where == (where or "") then
+			return rec
+		end
+	end
+	return nil
+end
+
 --- Every recorded mapping, grouped global-first and then by defining file.
 function M.list()
 	local out = {}
