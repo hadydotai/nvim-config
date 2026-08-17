@@ -142,7 +142,16 @@ end
 
 --- The pylsp to run: the project's own if it has one, since that is the only
 --- one whose plugins (ruff, mypy) are the project's own too, then the one
---- lua/deps.lua installs for us. Bare "pylsp" is the last resort on purpose.
+--- lua/deps.lua installs for us. Nil when there is neither.
+---
+--- There used to be a bare "pylsp" on the end as a last resort, and on a
+--- machine with pyenv it was worse than having nothing. The shim is executable,
+--- so it was always chosen; it is then run with the project as its cwd, reads
+--- that project's .python-version, and exits 1 saying the version is not
+--- installed. What you see of that is a single line in the LSP log and a
+--- language server that is quietly absent. A last resort that cannot be
+--- trusted to run is not one, and saying so here names the fix instead of
+--- burying it.
 local function command(venv)
 	local candidates = {}
 	if venv then
@@ -151,10 +160,10 @@ local function command(venv)
 	candidates[#candidates + 1] = vim.fn.stdpath("data") .. "/venv/bin/pylsp"
 	for _, path in ipairs(candidates) do
 		if vim.fn.executable(path) == 1 then
-			return { path }
+			return path
 		end
 	end
-	return { "pylsp" }
+	return nil
 end
 
 ---@type vim.lsp.Config
@@ -162,9 +171,21 @@ return {
 	-- A function so it can see config.root_dir, which is only resolved once a
 	-- buffer has been matched to a project.
 	cmd = function(dispatchers, config)
-		return vim.lsp.rpc.start(command(venv_for(config.root_dir)), dispatchers, {
-			cwd = config.root_dir,
-		})
+		local root = config.root_dir
+		local exe = command(venv_for(root))
+		if not exe then
+			-- Raised rather than notified: nvim reports a cmd that throws as the
+			-- reason this client did not start, which puts the sentence where you
+			-- are already looking when you wonder where the server went.
+			error(
+				("pylsp: none found for %s. Either :Deps install, which puts one in %s/venv, or install python-lsp-server into the project's own .venv"):format(
+					root or "this project",
+					vim.fn.stdpath("data")
+				),
+				0
+			)
+		end
+		return vim.lsp.rpc.start({ exe }, dispatchers, { cwd = root })
 	end,
 	-- on_init rather than before_init: the client copies config.settings when it
 	-- is constructed, so mutating them any later than this changes a table

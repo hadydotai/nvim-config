@@ -266,7 +266,22 @@ local DEPS = {
 	{ bin = "tree-sitter", why = "builds treesitter parsers", get = tree_sitter_cmd },
 	{ bin = "rg", why = "greps the project for <leader>g", get = ripgrep_cmd },
 	{ bin = "lua-language-server", why = "lua language server", get = lua_ls_cmd },
-	{ bin = "pylsp", why = "python language server", get = pylsp_cmd, after = "python3" },
+	-- The one entry checked by path rather than by name. For everything else
+	-- here the name is the right question: an rg or a gopls the system already
+	-- has is a perfectly good one, and installing a second copy would be waste.
+	-- pylsp is different because lsp/pylsp.lua refuses to take it from $PATH at
+	-- all, so the only pylsp that counts is the one this recipe installs, and
+	-- asking $PATH instead finds the pyenv shim: a lookup that answers
+	-- `pylsp --version` in a directory whose .python-version is satisfied and
+	-- dies in one whose is not. Probed once from wherever nvim started, it
+	-- reports the dependency met by a program we would never run.
+	{
+		bin = "pylsp",
+		path = DATA .. "/venv/bin/pylsp",
+		why = "python language server",
+		get = pylsp_cmd,
+		after = "python3",
+	},
 	{ bin = "tsgo", why = "typescript language server", get = tsgo_cmd, after = "npm" },
 	{ bin = "gopls", why = "go language server", get = gopls_cmd, after = "go", probe = "version" },
 	{ bin = "rust-analyzer", why = "rust language server", get = rust_analyzer_cmd },
@@ -277,11 +292,18 @@ local DEPS = {
 -- bin -> can it actually run, filled in by M.check() and kept for the session
 local probed = nil
 
-local function present(bin)
+--- What to run to find out whether a dependency is here: one particular file
+--- when only that file will do, and otherwise the name, resolved through $PATH
+--- the way a shell would resolve it.
+local function probe_target(dep)
+	return dep.path or dep.bin
+end
+
+local function present(dep)
 	if probed then
-		return probed[bin] == true
+		return probed[dep.bin] == true
 	end
-	return vim.fn.executable(bin) == 1
+	return vim.fn.executable(probe_target(dep)) == 1
 end
 
 --- Work out what actually runs, as opposed to what merely resolves on $PATH.
@@ -290,6 +312,13 @@ end
 --- unless the active version happens to have the tool installed. From the
 --- outside that is indistinguishable from a language server dying for no
 --- reason, which is exactly the thing this file exists to prevent.
+---
+--- What this cannot see is a shim that is well here and broken elsewhere. It
+--- runs each dependency once, in whatever directory nvim was started in, and a
+--- pyenv shim answers for the .python-version of the directory it is run in.
+--- A server started in a package that pins a version pyenv does not have dies
+--- there while the probe here says everything is fine. That is what `path` on
+--- a dependency is for: it takes $PATH out of the question entirely.
 ---
 --- Asynchronous, because it spawns every dependency once, and cached.
 function M.check(done)
@@ -309,11 +338,12 @@ function M.check(done)
 		end
 	end
 	for _, dep in ipairs(DEPS) do
-		if vim.fn.executable(dep.bin) == 0 then
+		local exe = probe_target(dep)
+		if vim.fn.executable(exe) == 0 then
 			results[dep.bin] = false
 			finish()
 		else
-			vim.system({ dep.bin, dep.probe or "--version" }, { text = true, timeout = 10000 }, function(out)
+			vim.system({ exe, dep.probe or "--version" }, { text = true, timeout = 10000 }, function(out)
 				results[dep.bin] = out.code == 0
 				finish()
 			end)
@@ -334,7 +364,7 @@ function M.status()
 		out[#out + 1] = {
 			bin = dep.bin,
 			why = dep.why,
-			ok = present(dep.bin),
+			ok = present(dep),
 			kind = dep.system and "system" or "local",
 			after = dep.after,
 			command = command,
