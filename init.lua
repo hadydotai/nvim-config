@@ -17,6 +17,7 @@ require("agent").setup() -- coding agents: spawn, track, talk to
 require("agent_spawn")
 require("agent_project")
 require("agent_dash")
+require("agent_review")
 require("agent_sidebar")
 require("buffers")
 require("symbols")

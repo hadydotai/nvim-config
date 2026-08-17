@@ -342,6 +342,11 @@ end
 --- Type into a running agent. The trailing carriage return is what submits it,
 --- and is separated because some CLIs drop a newline that arrives in the same
 --- write as the text before their prompt is ready.
+---
+--- Newlines inside the text need no protecting. A terminal sends CR for Enter,
+--- so a bare LF reaches these prompts as the newline it is: a multi-line
+--- message with a fenced block in it arrives whole, and only the CR below
+--- submits it. Measured against a real one, not assumed.
 function M.send(run, text, submit)
 	if not run or not run.chan or run.status == "exited" then
 		return false

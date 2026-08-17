@@ -257,13 +257,15 @@ working, which is waiting on you and which has finished.
 | `<leader>ad` | the dashboard |
 | `<leader>ae` | the sidebar, a column narrow enough to leave open |
 | `<leader>an` | make a worktree, with or without an agent to put in it |
+| `<leader>ar` | read what changed here, as a diff you can answer |
 | `<leader>aw` | the worktree setup for this project |
 
 On the dashboard, `<CR>` opens that agent's terminal through the same window
-overlay `<leader>f` uses, `i` types a line to it without leaving, `a` starts
-another, `n` makes a worktree, `r` resumes one you left behind, `s` stops one
-and `x` drops one: an agent that has exited is forgotten, a worktree is
-removed. The keys are in the window bar, so the list stays a list.
+overlay `<leader>f` uses, `d` reads what it changed, `i` types a line to it
+without leaving, `a` starts another, `n` makes a worktree, `r` resumes one you
+left behind, `s` stops one and `x` drops one: an agent that has exited is
+forgotten, a worktree is removed. The keys are in the window bar, so the list
+stays a list.
 
 `<CR>` never opens into the dashboard itself, since a list with a terminal in
 it is a list you no longer have. With nothing beside it but a directory
@@ -284,6 +286,41 @@ Three ways in, depending on what you are doing:
 Inside one you are in a terminal, so `<C-\><C-n>` leaves insert mode. `<Esc>` is
 deliberately not mapped: all three agents use it for their own menus, and taking
 it would break the interface it is meant to make easier to reach.
+
+### Reading what it did
+
+`d` on a dashboard row, or `<leader>ar` for wherever you are, opens the agent's
+whole change as a diff. `o` on any hunk asks what you think and sends that hunk,
+the file it is in and the lines it covers, back to the agent that wrote it.
+
+That last part is the reason this exists. The dashboard says `+12-3`, which is
+enough to know something happened and not enough to know whether it was right,
+and saying "no, not like that" about one particular line used to mean finding
+the file, selecting the lines and using `<leader>ac`, by which point the diff
+you were reading is gone.
+
+| key | |
+| --- | --- |
+| `<CR>` `<S-CR>` | open this file, at this line |
+| `o` | say something about this hunk |
+| `]h` `[h` | the next hunk, the previous one |
+| `R` | read it again |
+| `q` | close |
+
+One diff covers everything the agent has done, committed or not, because it is
+measured from where its branch left yours rather than from its last commit. An
+agent working in the checkout you are sitting in has no fork point of its own,
+so that one is measured from `HEAD` and shows only what is uncommitted, which is
+the honest answer: anything committed there is yours.
+
+Files git is not tracking get their own section at the bottom, since a diff
+never mentions them and "it did nothing" is the worst thing to be wrong about.
+
+It is read only. Nothing here stages, commits or discards anything: this is a
+window onto work in progress and the agent is the one holding the pen. It
+rereads when you enter the window and on `R`, not on the tick that redraws the
+dashboard, because the cursor is sitting on a hunk you are reading and
+rebuilding under it moves it.
 
 ### How it knows
 

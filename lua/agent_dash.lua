@@ -484,6 +484,14 @@ local function keys(into)
 		end)
 	end, "Say something to this agent")
 
+	map("d", function()
+		local item = current()
+		if not item then
+			return
+		end
+		require("agent_review").item(item)
+	end, "Read what changed here, as a diff you can answer")
+
 	map("a", function()
 		local item = current()
 		-- On a worktree, the obvious meaning of "start one" is "in this one",
@@ -594,7 +602,7 @@ function M.open(run)
 		-- row you are on stay the same question: a legend on line one would put
 		-- every agent one line further down than the list says it is.
 		vim.wo[win].winbar =
-			"%#AgentMeta# <CR> open   i say   a start   n worktree   r resume   s stop   x drop   q close"
+			"%#AgentMeta# <CR> open   d diff   i say   a start   n worktree   r resume   s stop   x drop   q close"
 	end
 	M.render(into, M.WIDE)
 
