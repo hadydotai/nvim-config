@@ -52,6 +52,24 @@ local MENU = {
 	{ "<leader>H", "the guide" },
 }
 
+-- What the window has to look like for this, and the reason it is written down
+-- rather than set and forgotten: these belong to the window, not to the buffer.
+-- Turning line numbers off for the start screen turns them off for whatever you
+-- open next in the same window, which is every file you open, because the start
+-- screen is the window you were already in. Kept here, kept per window in
+-- w:start_view, and put back when this buffer goes. Same shape as the save in
+-- markdown.lua, for the same reason.
+local WINDOW = {
+	number = false,
+	relativenumber = false,
+	signcolumn = "no",
+	cursorline = false,
+	list = false,
+	wrap = false,
+	-- The tildes down the left are a file's end, and this is not a file.
+	fillchars = "eob: ",
+}
+
 local function set_hl()
 	local set = function(name, spec)
 		vim.api.nvim_set_hl(0, name, vim.tbl_extend("force", spec, { default = true }))
@@ -260,6 +278,23 @@ local function eligible()
 	return vim.api.nvim_buf_line_count(into) == 1 and vim.api.nvim_buf_get_lines(into, 0, 1, false)[1] == ""
 end
 
+--- Give every window its options back. Driven off the window variable rather
+--- than off a remembered handle, so a start screen that somehow reached two
+--- windows leaves neither of them changed.
+local function restore()
+	for _, win in ipairs(vim.api.nvim_list_wins()) do
+		local saved = vim.w[win].start_view
+		if saved then
+			for option, value in pairs(saved) do
+				pcall(function()
+					vim.wo[win][option] = value
+				end)
+			end
+			vim.w[win].start_view = nil
+		end
+	end
+end
+
 function M.show()
 	set_hl()
 	local win = vim.api.nvim_get_current_win()
@@ -280,14 +315,20 @@ function M.show()
 		pcall(vim.api.nvim_buf_delete, before, { force = true })
 	end
 
-	vim.wo[win].number = false
-	vim.wo[win].relativenumber = false
-	vim.wo[win].signcolumn = "no"
-	vim.wo[win].cursorline = false
-	vim.wo[win].list = false
-	vim.wo[win].wrap = false
-	-- The tildes down the left are a file's end, and this is not a file.
-	vim.wo[win].fillchars = "eob: "
+	local saved = {}
+	for option, value in pairs(WINDOW) do
+		saved[option] = vim.wo[win][option]
+		vim.wo[win][option] = value
+	end
+	vim.w[win].start_view = saved
+
+	-- The buffer is wiped the moment its window shows anything else, which is
+	-- exactly the moment the window should look like a window again.
+	vim.api.nvim_create_autocmd("BufWipeout", {
+		group = "StartScreen",
+		buffer = buf,
+		callback = restore,
+	})
 
 	draw()
 end
