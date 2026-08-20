@@ -45,10 +45,10 @@ No plugin manager, no framework and nothing lazy loaded. Every file in `lua/`
 is one idea, loaded at startup by `init.lua`, and the editor is a git
 repository you are free to edit while it is running.
 
-That has a consequence worth knowing before anything else: this configuration
-is meant to be read from inside itself. `<leader>h` lists every mapping it
-sets, each with the file and line that set it, so any key you meet can be
-followed back to the code and the comment explaining why it exists.
+One consequence comes before all the others: this configuration is meant to be
+read from inside itself. `<leader>h` lists every mapping it sets, each with
+the file and line that set it, so any key you meet can be followed back to the
+code and the comment explaining why it exists.
 
 `<leader>` is the space bar.
 ]==],
@@ -62,8 +62,8 @@ followed back to the code and the comment explaining why it exists.
 		id = "windows",
 		title = "Windows, and where a file opens",
 		body = [==[
-One idea runs through every list here, so it is worth learning once. Anything
-that opens a file asks where to put it.
+One idea runs through every list here, so learn it once. Anything that opens a
+file asks where to put it.
 
 `<CR>` outlines the windows it could open into and waits: `hjkl` moves between
 the outlines and `<CR>` again opens there. With only one candidate it skips the
@@ -172,9 +172,8 @@ Most of the verbs are Neovim's own. They are listed here anyway, so the set
 reads as one thing rather than as ours plus a separate set you are expected to
 already know.
 
-`K` deserves its own sentence: the first press shows the documentation, and a
-second press moves the cursor into that float, where the usual motions scroll
-it and `q` closes it.
+`K` takes two presses. The first shows the documentation; the second moves the
+cursor into that float, where the usual motions scroll it and `q` closes it.
 
 `:lsp` drives the servers themselves. `:lsp restart` after changing a project's
 configuration, and `:lsp stop`, `:lsp enable`, `:lsp disable` for the rest. It
@@ -214,10 +213,10 @@ The first match is highlighted rather than inserted, and the documentation
 follows the highlight, so the list reads as something you are moving through
 and nothing reaches your buffer until you take it.
 
-The list stays up when it narrows to a single candidate. That sounds like a
-detail and is not: with the default setting the popup is drawn only when there
-is more than one match, so a list that is filtering correctly disappears at
-exactly the moment it has found your answer, and looks broken.
+The list stays up when it narrows to a single candidate. With the default
+setting the popup is drawn only when there is more than one match, so a list
+that is filtering correctly disappears at the moment it has found your answer,
+and looks broken.
 
 The documentation beside the list cannot be moved into, unlike `K`'s float. It
 is the popup 'completeopt' draws, and Neovim gives it no focus. Take the match
@@ -367,9 +366,9 @@ knows the other is there, so the second overwrites the first and the diff you
 read afterwards is neither of them.
 
 A fresh worktree is a clean checkout, which is correct and useless, because
-everything a project needs in order to build is gitignored on purpose.
-`<leader>aw` is where you say what to copy into a new one, what to symlink and
-what to run afterwards.
+everything a project needs to build is gitignored on purpose. `<leader>aw` is
+where you say what to copy into a new one, what to symlink and what to run
+afterwards.
 
 The dashboard lists worktrees beside agents, so a row is a piece of work rather
 than a process. An agent dies when Neovim quits. Its checkout does not.

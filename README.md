@@ -445,9 +445,9 @@ different decisions, and the second is better made looking at what the work was.
 symlink, what to run afterwards.
 
 A fresh worktree is a clean checkout, which is correct and useless. Everything
-a project needs in order to build is gitignored on purpose, so an agent arrives
-to no `.env`, no `node_modules` and no build cache, and its first discovery is
-that the project does not run.
+a project needs to build is gitignored on purpose, so an agent arrives to no
+`.env`, no `node_modules` and no build cache, and its first discovery is that
+the project does not run.
 
 | | |
 | --- | --- |
@@ -516,13 +516,13 @@ other text, and what is on screen when an agent exits is still there afterwards.
 
 Codex and grok take `--no-alt-screen`. Claude has no flag for it but honours
 `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN`, which is set for it here. The
-alternate screen is the thing worth avoiding: it has no scrollback in any
-terminal emulator, so an agent drawing there leaves nothing behind at all.
-Measured on claude 2.1.233 in a 22-line window: on the alternate screen the
-buffer stays at 22 lines however much is said, and told not to take it, the
-same conversation grows past the window and can be scrolled.
+alternate screen is the thing to avoid: it has no scrollback in any terminal
+emulator, so an agent drawing there leaves nothing behind at all. Measured on
+claude 2.1.233 in a 22-line window: on the alternate screen the buffer stays
+at 22 lines however much is said, and told not to take it, the same
+conversation grows past the window and can be scrolled.
 
-### What it does not do
+### Quitting ends them
 
 Agents are children of this Neovim, so quitting ends them. A tmux pane would
 survive and this does not; if that matters, the agent is a normal CLI and
@@ -559,7 +559,7 @@ them back. Not a preview in another window or another program: the same buffer,
 so the cursor keeps its place, the file stays editable, and the colours are the
 colorscheme's rather than some renderer's idea of them.
 
-```
+````
 ## Layout                        Layout
 
 - `init.lua` is the **order**    • init.lua is the order
@@ -568,7 +568,7 @@ colorscheme's rather than some renderer's idea of them.
 ```lua                             local x = 1
 local x = 1
 ```
-```
+````
 
 Most of that is Neovim's, not ours. Its markdown queries already conceal the
 code fences and the language annotation, and markdown_inline's conceal the
@@ -578,18 +578,17 @@ the line the cursor is on shows its source again the moment you start editing
 it.
 
 What Neovim leaves alone is headings and list bullets, and `lua/markdown.lua`
-draws those with extmarks. That is not the obvious mechanism and the reason is
-worth writing down, because the query language looks like it should do it. The
-parser is inconsistent about the space after a marker: `atx_hN_marker` stops at
-the last `#`, while a list marker node runs to the end of the space following
-it. So concealing the node whole is wrong in a different direction for each,
-one leaving a stray column and the other closing the gap up into `•item`. The
-query answer is `#offset!`, which is exactly what Neovim's own bullet conceals
-use, and they ship commented out with a note blaming "issues with spaces in the
-list marker nodes". It cannot work: the directive records
-`metadata[capture].offset` and nothing in the treesitter runtime ever reads it
-back. An extmark takes the range it is handed, which is why this is code rather
-than a query file.
+draws those with extmarks. That is not the obvious mechanism, and the query
+language looks like it should do the job instead. The parser is inconsistent
+about the space after a marker: `atx_hN_marker` stops at the last `#`, while a
+list marker node runs to the end of the space following it. So concealing the
+node whole is wrong in a different direction for each, one leaving a stray
+column and the other closing the gap up into `•item`. The query answer is
+`#offset!`, which is exactly what Neovim's own bullet conceals use, and they
+ship commented out with a note blaming "issues with spaces in the list marker
+nodes". It cannot work: the directive records `metadata[capture].offset` and
+nothing in the treesitter runtime ever reads it back. An extmark takes the
+range it is handed, which is why this is code rather than a query file.
 
 ### Tables
 
@@ -622,7 +621,7 @@ becomes as many lines as its tallest cell needs.
 ### Why a table is drawn as virtual lines
 
 The obvious way to do this is to conceal the source and draw the replacement
-over it. It cannot work, because of a property of `conceal` worth knowing:
+over it. It cannot work, because of a property of `conceal`:
 **concealing text hides the characters but does not give back the columns they
 occupied.** The line still wraps where it would have wrapped. Concealing 150
 characters of a 152-character line leaves two characters visible and a line
@@ -673,7 +672,7 @@ are told apart by an underline, which leaves the whole of the range to separate
 h3 from h6, where bold giving way to italic is the only other thing left to
 vary.
 
-### What it does not do
+### What is left as written
 
 Ordered lists keep their numbers, `1.` being what it renders as anyway.
 Paragraphs outside tables are not rewrapped to a measure; `linebreak` only
@@ -731,7 +730,7 @@ pointed; the title shows the directory it is listing instead, as `lua/`.
 ### Keys
 
 Neovim maps most of the LSP verbs itself, and this configuration leaves them
-alone. The full set is in `<leader>h`; the ones worth knowing up front:
+alone. The full set is in `<leader>h`; the ones to learn first:
 
 | key         | what it does                                              |
 | ----------- | --------------------------------------------------------- |
@@ -865,9 +864,8 @@ buffers no server was ever going to attach to, the segment is empty.
 
 ### Python: package root and nearest venv
 
-This is the part worth knowing about, because getting it wrong is the usual
-reason a Python language server appears to be running while doing nothing
-useful in a monorepo.
+Getting this wrong is the usual reason a Python language server appears to be
+running while doing nothing useful in a monorepo.
 
 `lsp/pylsp.lua` puts `pyproject.toml` before `.git` in `root_markers`, so the
 root is the **package**, not the checkout. In a repository laid out like
@@ -908,7 +906,7 @@ The binary to run is chosen in this order:
 2. `<data>/venv/bin/pylsp`, the one `:Deps install` puts in `.data/`.
 3. `pylsp` from `$PATH`, last on purpose.
 
-Two implementation notes, both non-obvious:
+Two implementation notes:
 
 - `cmd` is a function rather than a list, because that is the only hook that
   gets to see `config.root_dir`. It is only resolved once a buffer has been
@@ -1002,3 +1000,7 @@ globally rather than per filetype so a window split after the fact still has
 folds. Files open unfolded (`foldlevelstart=99`); `za` toggles one, `zR` opens
 everything, `zM` closes everything. Buffers with no parser cost nothing and
 come out unfolded.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
