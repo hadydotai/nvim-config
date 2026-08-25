@@ -43,9 +43,13 @@ end
 -- real repository is the difference between instant and several seconds; the
 -- glob is the fallback for directories git has never heard of.
 local function scan()
-	-- unignore.root() asks exactly this: is there a repository here to ask. It
-	-- is defined once, over there, so the listing and the exceptions to it can
-	-- never disagree about which repository they are talking about.
+	-- unignore.root() asks exactly this: is there a repository to ask, at or
+	-- above where we are. It is defined once, over there, so the listing and the
+	-- exceptions to it can never disagree about which repository they mean.
+	--
+	-- git ls-files run from a subdirectory scopes itself to that subdirectory
+	-- and reports relative to it, so opening nvim inside a package lists that
+	-- package, still with every .gitignore above it honoured.
 	if unignore.root() then
 		local out = vim.fn.systemlist({
 			"git",

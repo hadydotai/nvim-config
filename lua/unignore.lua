@@ -21,16 +21,39 @@ local FILE = vim.fn.stdpath("state") .. "/unignore.json"
 
 --- The repository the file list is taken from, or nil.
 ---
---- This is the same test find.lua makes before asking git for the listing at
---- all, and deliberately the same one rather than `rev-parse --show-toplevel`:
---- from a subdirectory git is not consulted, so nothing is being hidden and
---- there is correspondingly nothing to unhide. Defining it once is what stops
---- the two from ever disagreeing about which repository this is.
+--- Asked of git, rather than by looking for a .git beside us. A checkout is a
+--- tree and you work all over it, so `isdirectory(".git")` answers no
+--- everywhere except the very top, and find.lua then falls through to its glob
+--- with no .gitignore read at all. Measured in one service of a Rust monorepo:
+--- 2.1s to walk 26k paths and 23k files handed to the picker, against 16ms and
+--- 37 files from git, which knew the answer the whole time.
+---
+--- What comes back is the toplevel rather than the cwd, so the exceptions below
+--- are keyed by the repository and follow you into its subdirectories. find.lua
+--- asks this too, which is what stops the listing and the exceptions to it from
+--- ever disagreeing about which repository this is.
+---
+--- Cached per directory because M.files() reaches it on every keystroke of
+--- :find, and a process spawned there is the cost this is here to avoid. The
+--- key is the cwd, so :cd simply misses and asks again.
+local roots = {}
+
 function M.root()
-	if vim.fn.isdirectory(".git") == 0 or vim.fn.executable("git") == 0 then
-		return nil
+	local cwd = vim.fn.getcwd()
+	local known = roots[cwd]
+	if known ~= nil then
+		return known or nil -- false is "asked, and it is not a repository"
 	end
-	return vim.fn.getcwd()
+
+	local root = nil
+	if vim.fn.executable("git") == 1 then
+		local out = vim.fn.systemlist({ "git", "rev-parse", "--show-toplevel" })
+		if vim.v.shell_error == 0 and out[1] and out[1] ~= "" then
+			root = out[1]
+		end
+	end
+	roots[cwd] = root or false
+	return root
 end
 
 local function split(text)
@@ -142,7 +165,7 @@ end
 --- call `done` once something has been written.
 function M.edit(done)
 	if not M.root() then
-		vim.notify("unignore: not at the root of a git repository", vim.log.levels.WARN)
+		vim.notify("unignore: not in a git repository", vim.log.levels.WARN)
 		return
 	end
 	vim.ui.input({
