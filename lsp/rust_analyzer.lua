@@ -60,6 +60,8 @@ local function workspace_root(crate, on_dir)
 	)
 end
 
+local group = vim.api.nvim_create_augroup("RustAnalyzer", { clear = true })
+
 ---@type vim.lsp.Config
 return {
 	-- rust-analyzer on $PATH is a rustup proxy, and a proxy picks its toolchain
@@ -118,4 +120,29 @@ return {
 			},
 		},
 	},
+	--- rustfmt on write, through the server rather than by shelling out, so it
+	--- is the toolchain's own rustfmt and it reads the project's rustfmt.toml.
+	---
+	--- Formatting only. The Go file next door also organizes imports on write,
+	--- and that is not an omission here: Go makes an unused import a compile
+	--- error, so a write that left one behind leaves work to do by hand, while
+	--- in Rust it is a warning and removing it is an edit you should be asked
+	--- about. rust-analyzer has no source.organizeImports to ask for either.
+	---
+	--- Synchronous, for the reason gopls is: the write is already under way,
+	--- and an edit arriving after it would be applied to a buffer that had
+	--- already gone to disk, leaving the file and the buffer disagreeing.
+	on_attach = function(client, bufnr)
+		-- Cleared first: a buffer can attach more than once over its life, and
+		-- two copies of this would format twice per write.
+		vim.api.nvim_clear_autocmds({ group = group, buffer = bufnr })
+		vim.api.nvim_create_autocmd("BufWritePre", {
+			group = group,
+			buffer = bufnr,
+			desc = "rust-analyzer: format",
+			callback = function()
+				vim.lsp.buf.format({ bufnr = bufnr, id = client.id, async = false })
+			end,
+		})
+	end,
 }
