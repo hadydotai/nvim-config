@@ -13,7 +13,7 @@
 -- has to be on PATH: brew install tree-sitter-cli. Nothing needs it to read a
 -- file, only to build one.
 
-local LANGUAGES = { "python", "typescript", "tsx", "javascript", "go", "rust" }
+local LANGUAGES = { "python", "typescript", "tsx", "javascript", "go", "rust", "odin" }
 
 vim.pack.add({
 	{

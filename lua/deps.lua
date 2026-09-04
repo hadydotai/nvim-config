@@ -245,6 +245,81 @@ local function rust_analyzer_cmd()
 	}, " && ")
 end
 
+--- Odin from the release tarball rather than from Homebrew, and into
+--- ~/.local rather than into .data/ like the servers above.
+---
+--- Not Homebrew, because its formula deletes every pre-compiled library in
+--- vendor/ (brew will not ship binaries it did not build) and rebuilds six of
+--- them. 14 libraries survive against the tarball's 29, and the two that go
+--- missing on darwin, box2d and box3d, do not fail at link time: they #panic
+--- while compiling, pointing at a build script inside the Cellar that the next
+--- brew upgrade overwrites. The formula also drags in llvm@22 and lld@22, some
+--- 2 GB, for a compiler that already carries its own LLVM: the released binary
+--- loads @executable_path/libs/libLLVM.dylib and needs nothing but the system
+--- clang to link with.
+---
+--- Not .data/, because this is 218 MB of compiler, core and vendor that you
+--- also run from a terminal. It is a toolchain the config depends on, not a
+--- tool the config owns, so it goes where the rest of the machine can see it,
+--- the way rust-analyzer comes from rustup above.
+---
+--- Versioned directory behind a `current` symlink, so an upgrade is one more
+--- run of this and a rollback is one ln -sfn. --strip-components=1 is doing
+--- real work: a tagged release unpacks to a directory named after the nightly
+--- job that built it, odin-macos-arm64-nightly+2026-08-06, which is not a name
+--- anything could predict.
+local function odin_cmd()
+	local os_name = M.platform() == "mac" and "macos" or "linux"
+	-- a third spelling of the same two CPUs: macos/linux + arm64/amd64 here,
+	-- arm64/x86_64 in ols below, arm64/x64 in the tree-sitter and luals recipes
+	local arch = cpu() == "arm64" and "arm64" or "amd64"
+	return table.concat({
+		'tag=$(curl -fsSL https://api.github.com/repos/odin-lang/Odin/releases/latest'
+			.. ' | sed -n \'s/.*"tag_name": *"\\([^"]*\\)".*/\\1/p\' | head -1)',
+		'mkdir -p "$HOME/.local/share/odin" "$HOME/.local/bin"',
+		('curl -fsSL "https://github.com/odin-lang/Odin/releases/download/$tag/odin-%s-%s-$tag.tar.gz"'):format(
+			os_name,
+			arch
+		) .. " -o /tmp/odin.tar.gz",
+		"rm -rf /tmp/odin-unpack && mkdir -p /tmp/odin-unpack",
+		"tar -xzf /tmp/odin.tar.gz -C /tmp/odin-unpack --strip-components=1",
+		'rm -rf "$HOME/.local/share/odin/$tag" && mv /tmp/odin-unpack "$HOME/.local/share/odin/$tag"',
+		'ln -sfn "$tag" "$HOME/.local/share/odin/current"',
+		'ln -sfn "$HOME/.local/share/odin/current/odin" "$HOME/.local/bin/odin"',
+	}, " && ")
+end
+
+--- ols ships a zip rather than a tarball, so this is the one recipe that needs
+--- unzip. The archive carries three things: the server, odinfmt, and a builtin/
+--- folder holding the declarations for the compiler intrinsics, which ols finds
+--- relative to the real path of its own binary. Measured: with builtin/ beside
+--- it, hover on intrinsics.read_cycle_counter answers through the symlink in
+--- bin/; with the folder renamed away, the same hover returns null. So the
+--- unpacked directory has to stay whole and bin/ gets a symlink into it, not a
+--- copy of the binary.
+---
+--- odinfmt is linked too, though nothing here needs it: ols formats in process,
+--- and lsp/ols.lua asks the server rather than shelling out. It is for the
+--- times you want to format a file from a shell.
+local function ols_cmd()
+	local os_name = M.platform() == "mac" and "darwin" or "unknown-linux-gnu"
+	local arch = cpu() == "arm64" and "arm64" or "x86_64"
+	local dir = DATA .. "/ols"
+	local asset = ("ols-%s-%s"):format(arch, os_name)
+	return table.concat({
+		'tag=$(curl -fsSL https://api.github.com/repos/DanielGavin/ols/releases/latest'
+			.. ' | sed -n \'s/.*"tag_name": *"\\([^"]*\\)".*/\\1/p\' | head -1)',
+		("rm -rf %s && mkdir -p %s %s"):format(dir, dir, BIN),
+		('curl -fsSL "https://github.com/DanielGavin/ols/releases/download/$tag/%s.zip" -o /tmp/ols.zip'):format(
+			asset
+		),
+		("unzip -oq /tmp/ols.zip -d %s"):format(dir),
+		("mv %s/%s %s/ols && mv %s/odinfmt-%s-%s %s/odinfmt"):format(dir, asset, dir, dir, arch, os_name, dir),
+		("chmod +x %s/ols %s/odinfmt"):format(dir, dir),
+		("ln -sfn %s/ols %s/ols && ln -sfn %s/odinfmt %s/odinfmt"):format(dir, BIN, dir, BIN),
+	}, " && ")
+end
+
 --------------------------------------------------------------------------- --
 -- the list
 --------------------------------------------------------------------------- --
@@ -285,6 +360,18 @@ local DEPS = {
 	{ bin = "tsgo", why = "typescript language server", get = tsgo_cmd, after = "npm" },
 	{ bin = "gopls", why = "go language server", get = gopls_cmd, after = "go", probe = "version" },
 	{ bin = "rust-analyzer", why = "rust language server", get = rust_analyzer_cmd },
+	-- `odin version` and `ols version`, as subcommands and with no dashes, for
+	-- the reason go is spelled that way above and then some: every flag ols
+	-- recognises as a flag, --version included, starts the language server and
+	-- waits on stdin, so the probe would sit there until it timed out and report
+	-- a working server as missing.
+	{
+		bin = "odin",
+		why = "the odin compiler; ols reads the collections and the checker out of it",
+		get = odin_cmd,
+		probe = "version",
+	},
+	{ bin = "ols", why = "odin language server", get = ols_cmd, after = "odin", probe = "version" },
 }
 
 --- Every dependency with an `ok` flag and the command that would provide it.

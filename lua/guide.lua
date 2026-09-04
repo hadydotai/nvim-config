@@ -164,9 +164,9 @@ is "all of them" and you are about to work through it.
 		id = "lsp",
 		title = "Language servers",
 		body = [==[
-Five are configured and start on their own when you open a file they handle:
-lua_ls, pylsp, tsgo, gopls and rust_analyzer. There is nothing to enable per
-project.
+Six are configured and start on their own when you open a file they handle:
+lua_ls, pylsp, tsgo, gopls, rust_analyzer and ols. There is nothing to enable
+per project.
 
 Most of the verbs are Neovim's own. They are listed here anyway, so the set
 reads as one thing rather than as ours plus a separate set you are expected to
