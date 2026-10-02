@@ -123,17 +123,22 @@ end
 -- listing
 --------------------------------------------------------------------------- --
 
---- The ignored files this repository's patterns ask for, to be added to the
---- listing find.lua already has. Empty and free when there are no patterns,
+--- The ignored files this repository's patterns ask for, relative to its top,
+--- to be added to the listing find.lua already has. Empty and free when there are no patterns,
 --- which is the usual case and matters because :find asks on every keystroke.
 function M.files()
 	local patterns = split(M.text())
 	if #patterns == 0 then
 		return {}
 	end
+	local root = M.root()
 
 	local cmd = {
 		"git",
+		-- from the top, as find.lua lists, so the paths line up with its own and
+		-- the patterns mean the same thing from whichever subdirectory you are in
+		"-C",
+		root,
 		"-c",
 		"core.quotePath=false", -- as in find.lua: octal-escaped paths cannot be opened
 		"ls-files",
@@ -153,7 +158,7 @@ function M.files()
 	-- a trailing slash, and a name it knows about may have gone from the disk.
 	-- Neither can be opened, so neither belongs in a list of files to open.
 	return vim.tbl_filter(function(f)
-		return f ~= "" and vim.fn.filereadable(f) == 1
+		return f ~= "" and vim.fn.filereadable(vim.fs.joinpath(root, f)) == 1
 	end, out)
 end
 

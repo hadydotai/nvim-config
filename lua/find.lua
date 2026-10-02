@@ -1,4 +1,8 @@
--- <leader>f: a modal, filterable list of the files under the current directory.
+-- <leader>f: a modal, filterable list of the files in the repository.
+--
+-- The whole repository, from its top, wherever in it nvim was started or has
+-- since :cd'd to; outside one, the current directory. The title says which:
+-- "Files in ~/code/thing". <leader>g greps the same tree, through M.base().
 --
 --   type     narrow the list, fuzzily, against the whole relative path
 --   <cr>     outline a target window, hjkl to move, <cr> to open there
@@ -38,21 +42,42 @@ local function ignored(path)
 	return false
 end
 
--- Every file below the current directory, cheapest way first. git knows the
+--- The directory listed here and grepped by <leader>g: the repository's top,
+--- or the current directory when there is no repository to ask.
+---
+--- unignore.root() is what answers it, defined once over there so the listing
+--- and the exceptions to it can never disagree about which repository they
+--- mean.
+function M.base()
+	return unignore.root() or vim.fn.getcwd()
+end
+
+-- Long enough for ~/code/org/project/package; anything deeper keeps its tail,
+-- which is the part that tells two checkouts apart.
+local WHERE_WIDTH = 40
+
+--- M.base() for a title, home as ~ and the front cut off when it is long.
+function M.where()
+	local dir = vim.fn.fnamemodify(M.base(), ":~")
+	if vim.fn.strchars(dir) > WHERE_WIDTH then
+		dir = "..." .. vim.fn.strcharpart(dir, vim.fn.strchars(dir) - WHERE_WIDTH + 3)
+	end
+	return dir
+end
+
+-- Every file under M.base(), relative to it, cheapest way first. git knows the
 -- answer already and knows it without walking .gitignore'd trees, which on any
 -- real repository is the difference between instant and several seconds; the
 -- glob is the fallback for directories git has never heard of.
 local function scan()
-	-- unignore.root() asks exactly this: is there a repository to ask, at or
-	-- above where we are. It is defined once, over there, so the listing and the
-	-- exceptions to it can never disagree about which repository they mean.
-	--
-	-- git ls-files run from a subdirectory scopes itself to that subdirectory
-	-- and reports relative to it, so opening nvim inside a package lists that
-	-- package, still with every .gitignore above it honoured.
-	if unignore.root() then
+	local root = unignore.root()
+	if root then
 		local out = vim.fn.systemlist({
 			"git",
+			-- from the top, so a subdirectory lists the whole repository and
+			-- every path comes back relative to the top rather than to here
+			"-C",
+			root,
 			-- otherwise anything non-ASCII comes back octal-escaped and quoted,
 			-- which is a path that cannot be opened
 			"-c",
@@ -65,7 +90,7 @@ local function scan()
 		if vim.v.shell_error == 0 then
 			-- --cached still lists files deleted from the worktree
 			local files = vim.tbl_filter(function(f)
-				return f ~= "" and vim.fn.filereadable(f) == 1
+				return f ~= "" and vim.fn.filereadable(vim.fs.joinpath(root, f)) == 1
 			end, out)
 			-- and back on the end, the ignored ones asked for by name
 			vim.list_extend(files, unignore.files())
@@ -82,8 +107,14 @@ local function scan()
 	return out
 end
 
+-- :find edits what it is given relative to the current directory, and the
+-- listing is relative to the top, so the matches go back as paths from here:
+-- relative under the current directory, whole outside it.
 function _G.native_find(text, _)
-	return vim.fn.matchfuzzy(scan(), text)
+	local base = M.base()
+	return vim.tbl_map(function(f)
+		return vim.fn.fnamemodify(vim.fs.joinpath(base, f), ":.")
+	end, vim.fn.matchfuzzy(scan(), text))
 end
 
 --------------------------------------------------------------------------- --
@@ -112,14 +143,15 @@ end
 -- as the filter having quietly broken. Capped, since the title sets a floor on
 -- how wide the float has to be.
 local function title()
+	local name = "Files in " .. M.where()
 	local patterns = unignore.text()
 	if patterns == "" then
-		return "Files"
+		return name
 	end
 	if #patterns > 30 then
 		patterns = patterns:sub(1, 27) .. "..."
 	end
-	return "Files +" .. patterns
+	return name .. " +" .. patterns
 end
 
 local FOOTER = win_pick.FOOTER:gsub("%s+$", "") .. "   <C-.> unignore "
@@ -127,7 +159,7 @@ local FOOTER = win_pick.FOOTER:gsub("%s+$", "") .. "   <C-.> unignore "
 function M.show()
 	local files = scan()
 	if #files == 0 then
-		vim.notify("find: no files under " .. vim.fn.getcwd(), vim.log.levels.WARN)
+		vim.notify("find: no files under " .. M.base(), vim.log.levels.WARN)
 		return
 	end
 
@@ -149,7 +181,7 @@ function M.show()
 		},
 		open = function(win, path)
 			win_pick.focus(win)
-			vim.cmd("edit " .. vim.fn.fnameescape(path))
+			vim.cmd("edit " .. vim.fn.fnameescape(vim.fs.joinpath(M.base(), path)))
 		end,
 	})
 end

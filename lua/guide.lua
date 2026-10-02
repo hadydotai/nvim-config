@@ -107,7 +107,9 @@ tree into the middle of your layout, and the moves keep it in its column.
 		id = "files",
 		title = "Finding a file",
 		body = [==[
-`<leader>f` searches the project by file name, narrowing as you type.
+`<leader>f` searches the project by file name, narrowing as you type. The
+project is the git repository, from its top, or the current directory outside
+one; the title names it.
 `<leader>b` is the same dialog over the buffers already open, which is the
 faster of the two once you are a few files in.
 
@@ -149,7 +151,8 @@ Inside it, `<CR>` asks which window to open into exactly as the lists do, and
 		title = "Searching the project",
 		body = [==[
 `<leader>g` greps the project with ripgrep, showing matches as you type rather
-than after you commit to a pattern.
+than after you commit to a pattern. It covers the same tree `<leader>f` lists,
+named in the title.
 
 `<CR>` opens a match through the window question. `<C-q>` sends the whole
 result set to the quickfix list, which is what you want the moment the answer

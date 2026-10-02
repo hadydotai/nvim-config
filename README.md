@@ -214,6 +214,12 @@ could run, and the numbers would have arrived a second late.
 `node_modules` is never walked. Outside a repository it falls back to a glob
 with an ignore list.
 
+It lists the whole repository from its top, wherever in it nvim was started,
+and `<leader>g` greps the same tree; outside a repository both take the current
+directory. Both titles say which, as `Files in ~/code/thing` and
+`Grep in ~/code/thing`, so a search is never ambiguous about how much of the
+disk it covered.
+
 ### Ignored files you want back
 
 Respecting `.gitignore` is right nearly always and wrong for the handful of
@@ -229,7 +235,7 @@ a bare `dist` matches at any depth, and `*` on its own is therefore "show
 everything ignored", which is the quickest way to find the one file you cannot
 name.
 
-The title says so while it is on, as `Files +dist,.env`, because a
+The title says so while it is on, as `Files in ~/code/thing +dist,.env`, because a
 `node_modules` path appearing in the list should read as something you asked
 for rather than as the filter having quietly broken. Clearing the prompt turns
 it back off.

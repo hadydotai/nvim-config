@@ -1,4 +1,9 @@
--- <leader>g: every line in the project matching what you type.
+-- <leader>g: every line in the repository matching what you type.
+--
+-- The same tree <leader>f lists, from find.base(): the repository's top, or
+-- the current directory outside one. The title says which: "Grep in
+-- ~/code/thing". Like ripgrep everywhere, it leaves out what .gitignore does
+-- and hidden files.
 --
 --   type     re-runs the search, debounced; the pattern goes to ripgrep
 --   <cr>     outline a target window, hjkl to move, <cr> to open there
@@ -19,6 +24,7 @@
 
 local M = {}
 
+local find = require("find")
 local picker = require("picker")
 local win_pick = require("win_pick")
 
@@ -38,7 +44,8 @@ end
 --- file:line, with the directory dimmed so the file name reads first, then the
 --- matching line with its indentation trimmed off.
 local function columns(hit)
-	local where = hit.file .. ":" .. hit.lnum
+	-- the placeholder row has no place, and an empty column is dropped
+	local where = hit.file == "" and "" or hit.file .. ":" .. hit.lnum
 	local col = { text = where, hl = "GrepFile" }
 	local slash = hit.file:match("^.*()/")
 	if slash then
@@ -92,6 +99,8 @@ local function search(text, done)
 		return done({})
 	end
 
+	-- Run from the top, so the paths that come back are relative to it, as
+	-- <leader>f shows them, and are opened by joining them back onto it.
 	running = vim.system({
 		"rg",
 		"--vimgrep", -- file:line:col:text, one match per line
@@ -99,13 +108,14 @@ local function search(text, done)
 		"--color=never",
 		"--", -- a pattern starting with - is a pattern, not a flag
 		text,
-	}, { text = true }, function(out)
+	}, { text = true, cwd = find.base() }, function(out)
 		running = nil
 		-- 0 matched, 1 matched nothing, 2 and up is ripgrep complaining, which
 		-- while typing usually means the regular expression is half written
 		local hits = out.code > 1 and {} or parse(out.stdout or "")
+		local note = #hits >= LIMIT and ("- stopped at " .. LIMIT .. ", keep typing") or nil
 		vim.schedule(function()
-			done(hits)
+			done(hits, note)
 		end)
 	end)
 end
@@ -117,7 +127,7 @@ local function to_quickfix(hits)
 	vim.fn.setqflist({}, " ", {
 		title = "Grep",
 		items = vim.tbl_map(function(hit)
-			return { filename = hit.file, lnum = hit.lnum, col = hit.col, text = hit.text }
+			return { filename = vim.fs.joinpath(find.base(), hit.file), lnum = hit.lnum, col = hit.col, text = hit.text }
 		end, hits),
 	})
 	vim.cmd("copen")
@@ -136,13 +146,14 @@ function M.show()
 	-- nothing, and the picker will not open on an empty list, so it starts on
 	-- the word under the cursor, which is the search you were about to type.
 	local seed = vim.fn.expand("<cword>")
-	search(seed, function(hits)
+	search(seed, function(hits, note)
 		if #hits == 0 then
 			hits = { { file = "", lnum = 0, col = 0, text = "type to search" } }
 		end
 		picker.open({
-			title = "Grep",
+			title = "Grep in " .. find.where(),
 			items = hits,
+			note = note,
 			columns = columns,
 			max = { 60, 200 },
 			flex = 2,
@@ -153,7 +164,7 @@ function M.show()
 					return
 				end
 				win_pick.focus(win)
-				vim.cmd("edit " .. vim.fn.fnameescape(hit.file))
+				vim.cmd("edit " .. vim.fn.fnameescape(vim.fs.joinpath(find.base(), hit.file)))
 				pcall(vim.api.nvim_win_set_cursor, 0, { hit.lnum, math.max(0, hit.col - 1) })
 				vim.cmd("normal! zz")
 			end,

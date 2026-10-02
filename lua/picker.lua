@@ -254,7 +254,9 @@ local function winbar(v, count)
 		name = name ~= "" and vim.fn.fnamemodify(name, ":t") or "[No Name]"
 		parts[#parts + 1] = "%#PickerPanelMeta#  " .. name
 	end
-	parts[#parts + 1] = panel_keys(v)
+	-- Cut from here when the panel is narrow: the keys are the same on every
+	-- panel, the title is what says what this one is.
+	parts[#parts + 1] = "%<" .. panel_keys(v)
 	-- Statusline syntax, so a per cent in a file name is not a format item.
 	return (table.concat(parts):gsub("%%(%a)", "%%%%%1"):gsub("%%$", "%%%%"))
 end
@@ -306,6 +308,9 @@ local function draw(v)
 
 	local shown, total = #v.shown, #v.items
 	local count = shown == total and string.format("(%d)", total) or string.format("(%d/%d)", shown, total)
+	if v.note then
+		count = count .. " " .. v.note
+	end
 	if v.kind == "panel" then
 		vim.wo[v.list_win].winbar = winbar(v, count)
 	else
@@ -370,11 +375,22 @@ end
 local function refetch(v, text)
 	v.generation = v.generation + 1
 	local gen = v.generation
-	v.opts.query(text, function(values)
+	v.opts.query(text, function(values, note)
 		if v.closed or gen ~= v.generation then
 			return
 		end
 		v.items = prepare(values or {}, v.opts)
+		v.note = note
+		-- Measured again for the rows that came back, or every column but the
+		-- flexible one stays the width the first answer needed: a path column
+		-- sized for "type to search" cuts every path after it down to "...".
+		-- The list itself does not change width, since with a query function
+		-- the flexible column takes whatever the others leave of the room. An
+		-- empty answer keeps the old measurements, having nothing to measure.
+		if #v.items > 0 then
+			local room, fill = room_for(v)
+			v.lay = layout(v.items, v.opts, v.footer, room, fill)
+		end
 		show_all(v, tokens(text))
 	end)
 end
@@ -540,6 +556,7 @@ end
 local function snapshot(v)
 	return {
 		items = v.items,
+		note = v.note,
 		query = query_text(v),
 		index = v.index,
 		target_win = v.target_win,
@@ -766,7 +783,9 @@ end
 ---            rather than a row in it, so it fires with nothing highlighted
 ---            too, and is given every item currently on screen
 ---   query    function(text, done); when given, typing re-asks it for the whole
----            list instead of narrowing `items`, which stay the first answer
+---            list instead of narrowing `items`, which stay the first answer.
+---            done(values, note) may add a note to the title after the count
+---   note     that note for `items`, the answer the dialog opens with
 ---   open     function(win, item); rows that open into a window. The modal
 ---            binds <CR>/<S-CR> through win_pick, and a panel opens into the
 ---            window it is pointed at. Prefer this to wiring win_pick.actions
@@ -806,6 +825,14 @@ function M.open(opts, seed)
 	-- so a list that fits is shown whole rather than capped at some fraction
 	local room = math.max(3, vim.o.lines - 5 - 4)
 	local height = math.max(1, math.min(#items, room))
+	-- A list re-asked on every keystroke is sized for the answer it will get,
+	-- not the one it opened with, which was the word under the cursor and is
+	-- often a single row. All of the room, for the same reason the width takes
+	-- all of it: a window that grew and shrank as you typed would move the
+	-- prompt out from under you.
+	if opts.query then
+		height = room
+	end
 
 	local row = math.max(0, math.floor((vim.o.lines - (height + 5)) / 2))
 	local left = math.max(0, math.floor((vim.o.columns - lay.total) / 2))
@@ -854,6 +881,7 @@ function M.open(opts, seed)
 		kind = "modal",
 		title = opts.title,
 		items = items,
+		note = seed and seed.note or opts.note,
 		shown = {},
 		toks = {},
 		fuzzy = opts.fuzzy,
@@ -978,6 +1006,7 @@ local function build(opts, seed, from)
 		kind = "panel",
 		title = opts.title,
 		items = seed.items,
+		note = seed.note,
 		shown = {},
 		toks = {},
 		fuzzy = opts.fuzzy,
