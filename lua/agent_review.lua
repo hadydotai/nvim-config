@@ -432,6 +432,9 @@ function M.item(item)
 	if item.session then
 		return M.show({ dir = item.session.cwd, name = item.session.name })
 	end
+	if item.place then
+		return M.show({ dir = item.place.dir, name = vim.fn.fnamemodify(item.place.dir, ":t") })
+	end
 end
 
 --- Review where you are. The dashboard already knows the fork point of every
@@ -441,7 +444,10 @@ end
 function M.here()
 	local dir = vim.fn.getcwd()
 	for _, item in ipairs(require("agent_dash").items()) do
-		local where = (item.run and item.run.cwd) or (item.tree and item.tree.dir) or (item.session and item.session.cwd)
+		local where = (item.run and item.run.cwd)
+			or (item.tree and item.tree.dir)
+			or (item.place and item.place.dir)
+			or (item.session and item.session.cwd)
 		if where == dir then
 			return M.item(item)
 		end

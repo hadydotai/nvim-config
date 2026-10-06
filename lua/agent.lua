@@ -16,6 +16,7 @@
 --   M.spawn{cli=, cwd=, prompt=}  start one
 --   M.runs()                      newest first, for the views
 --   M.send(run, text)             type into it
+--   M.drop(run, done)             kill it and forget it, in one go
 --   M.watch(fn)                   call fn whenever anything changes
 --
 -- One thing to know: an agent is a child of this Neovim, so quitting Neovim
@@ -299,6 +300,14 @@ function M.spawn(opts)
 				cwd = cwd,
 				env = env,
 				on_exit = function(_, code)
+					-- Dropped: already off every list, and recording it now would
+					-- write back the conversation that was just erased.
+					if run.dropped then
+						if run.on_dropped then
+							vim.schedule(run.on_dropped)
+						end
+						return
+					end
 					run.exit_code = code
 					run.status = "exited"
 					run.doing = code == 0 and "finished" or ("exited " .. code)
@@ -363,23 +372,51 @@ end
 --- Stop an agent. Terminating rather than killing so it can save its session.
 function M.stop(run)
 	if run and run.job and run.status ~= "exited" then
+		-- So that its exit reads as yours rather than as news.
+		run.stopped = true
 		pcall(vim.fn.jobstop, run.job)
 		return true
 	end
 	return false
 end
 
---- Forget a run that has exited, and its buffer with it.
-function M.forget(run)
-	if not run or run.status ~= "exited" then
-		return false
+--- Kill a run and forget it, whatever state it is in, in one go. It is off
+--- every list at once; `done` is called once the process has actually gone,
+--- which is when whatever it was running in can safely be taken away.
+---
+--- Nothing is written down about it: the remembered conversation is the
+--- caller's to erase, and a run that has been dropped is never recorded again.
+function M.drop(run, done)
+	if not run or run.dropped then
+		return
 	end
-	if run.buf and vim.api.nvim_buf_is_valid(run.buf) then
-		pcall(vim.api.nvim_buf_delete, run.buf, { force = true })
-	end
+	run.dropped = true
 	runs[run.id] = nil
+
+	local finished = false
+	local function finish()
+		if finished then
+			return
+		end
+		finished = true
+		if run.buf and vim.api.nvim_buf_is_valid(run.buf) then
+			pcall(vim.api.nvim_buf_delete, run.buf, { force = true })
+		end
+		if done then
+			done()
+		end
+	end
+
+	if run.status == "exited" or not run.job then
+		finish()
+	else
+		run.on_dropped = finish
+		pcall(vim.fn.jobstop, run.job)
+		-- jobstop escalates to SIGKILL on its own; this is for a process that
+		-- somehow outlives that, so the cleanup behind it is never left waiting.
+		vim.defer_fn(finish, 3000)
+	end
 	changed()
-	return true
 end
 
 --- How long a run has been in its current state, as something short enough for

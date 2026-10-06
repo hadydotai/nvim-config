@@ -66,6 +66,7 @@ taking a mapping away and by adding one nobody wrote up.
 | `lua/agent_spawn.lua` | `<leader>aa`, starting one and feeding it context   |
 | `lua/agent_dash.lua` | `<leader>ad`, the dashboard buffer                   |
 | `lua/agent_sidebar.lua` | `<leader>ae`, the same thing as a column          |
+| `lua/agent_toast.lua` | `<leader>ao`, the note when one is done or needs you |
 | `lua/agent_review.lua` | `<leader>ar`, the diff an agent made, and `o` to answer a hunk |
 | `lua/agent_worktree.lua` | `<leader>an`, worktrees: making, choosing and removing one |
 | `lua/agent_store.lua` | the agents you have run, so one can be resumed later |
@@ -301,25 +302,66 @@ working, which is waiting on you and which has finished.
 | `<leader>an` | make a worktree, with or without an agent to put in it |
 | `<leader>ar` | read what changed here, as a diff you can answer |
 | `<leader>aw` | the worktree setup for this project |
+| `<leader>ao` | open the newest agent that is done or needs you |
+| `<leader>ax` | dismiss the note saying so |
 
 On the dashboard, `<CR>` opens that agent's terminal through the same window
 overlay `<leader>f` uses, `d` reads what it changed, `i` types a line to it
 without leaving, `a` starts another, `n` makes a worktree, `r` resumes one you
-left behind, `s` stops one and `x` drops one: an agent that has exited is
-forgotten, a worktree is removed. The keys are in the window bar, so the list
-stays a list.
+left behind, `s` stops one and keeps its conversation to resume, and `x` erases
+it. The keys are in the window bar, so the list stays a list.
+
+`x` is one press, on any row, whatever state it is in, and it never asks. The
+agent is killed and forgotten along with the conversation it left, and when it
+was running in a worktree of its own, the worktree goes too, uncommitted work
+and branch included. The row is gone at once; the worktree follows a moment
+later, once the agent has actually exited. The checkout you are sitting in, and
+a worktree you made by hand, are never removed, only emptied of agents.
+
+Agents sharing a place are listed under it, so it is plain which of them are
+editing the same files:
+
+```
+● api-auth             2 agents      agent/api-auth
+○ ├ write-tests  claude your turn 4s
+● └ fix-login    claude Edit      8s
+● bump-deps      claude Bash      1m  agent/bump-deps
+```
+
+`x` on the place's own row erases the place and every agent in it. `x` on an
+agent indented under it erases only that agent and leaves the rest working.
 
 `<CR>` never opens into the dashboard itself, since a list with a terminal in
 it is a list you no longer have. With nothing beside it but a directory
 listing, that listing is what gets taken over, exactly as opening a file from
 it would.
 
+### When one is done
+
+Start an agent, go back to code, and you hear about it: when one ends its turn,
+stops to ask permission, or exits partway through, a note appears in the
+top-right corner, the terminal bell rings, and the statusline says `1 agent`.
+`<leader>ao` opens the newest one in the window you are in, ready to type, and
+pressing it again goes to the next. `<leader>ax` puts the note away; the
+statusline keeps counting until you have been to each of them.
+
+An agent comes off the moment you look at its terminal, however you got there,
+once it is working again because you answered it from the dashboard, or when you
+stop it with `s`, since that is you dropping it. Nothing expires on a timer,
+since the note is for when you come back. Nothing goes on it for an agent whose
+terminal you are already looking at.
+
+The note cannot take focus, so no key ever goes to it: `<Esc>`, `q` and
+everything else mean what they meant. The two keys are normal mode only, so
+from inside another agent it is `<C-\><C-n>` first.
+
 ### Getting to one
 
-Three ways in, depending on what you are doing:
+Four ways in, depending on what you are doing:
 
 - `<CR>` on a row of the dashboard or the sidebar, which puts its terminal in a
   window you pick and drops you into insert mode ready to type
+- `<leader>ao`, for the one the note in the corner is telling you about
 - `<leader>b`, because an agent's terminal is an ordinary listed buffer named
   after the run, so the buffer list finds it like anything else
 - `<leader>ac` or `i` on the dashboard, to say something to an agent without
@@ -436,14 +478,10 @@ two branches parted, so it stays right after you have carried on committing in
 the checkout you are sitting in.
 
 On such a row, `<CR>` opens the worktree itself in the file browser, `a` starts
-an agent in it without asking where, and `x` removes it. Removal
-asks first, and asks separately about the branch, which is the only remaining
-copy of anything the agent committed there; git's own refusal to discard
-uncommitted work is passed back as a second question rather than worked around.
-
-Forgetting an agent that has exited leaves its worktree behind as a row of its
-own, which is the point: dropping the process and dropping the work are
-different decisions, and the second is better made looking at what the work was.
+an agent in it without asking where, and `x` removes it and its branch, without
+asking, as it does everywhere else on the dashboard. Merge or push anything you
+want to keep first: the branch was the only remaining copy of what the agent
+committed there.
 
 ### What a new worktree needs
 

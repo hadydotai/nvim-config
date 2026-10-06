@@ -2,6 +2,10 @@
 -- doing it, and what it has changed. Then every worktree of this project whose
 -- agent is gone, and every conversation left behind in one.
 --
+-- Agents that share a place are shown under it: a row for the worktree, or the
+-- checkout, and the agents in it indented below, so it is plain which of them
+-- are editing the same files.
+--
 -- That second half is the reason this is a list of places rather than a list of
 -- processes. An agent dies when Neovim quits; the branch, the worktree and the
 -- conversation do not, and a dashboard that showed only what is running would
@@ -18,8 +22,11 @@
 --   a      start an agent, in that worktree when the cursor is on one
 --   n      make a worktree, with nothing in it yet
 --   r      resume the conversation this row remembers
---   s      stop it
---   x      drop it: forget an agent that has exited, remove a worktree
+--   s      stop it, keeping the conversation to resume later
+--   x      erase it, at once and without asking: kill the agent and forget
+--          it, and remove the worktree and its branch when it had one. On a
+--          worktree's own row, every agent in it goes too; on an agent
+--          indented under one, only that agent.
 --   q      close the dashboard
 --
 -- The rows redraw on every change and once a second besides, because elapsed
@@ -58,6 +65,7 @@ local function set_hl()
 	set("AgentIdle", { link = "Comment" })
 	set("AgentExited", { link = "NonText" })
 	set("AgentRunName", { link = "Normal" })
+	set("AgentPlace", { link = "Directory" })
 	set("AgentMeta", { link = "Comment" })
 	set("AgentAdded", { link = "DiffAdd" })
 	set("AgentRemoved", { link = "DiffDelete" })
@@ -116,6 +124,7 @@ end
 --- a whole TREES_EVERY, which reads as x having done nothing and invites a
 --- second x onto a worktree that is already gone.
 local trees, trees_at, trees_busy, known = {}, nil, false, {}
+local erasing = {}
 local generation = 0
 
 local function refresh_trees(force)
@@ -179,12 +188,41 @@ end
 function M.items()
 	refresh_trees()
 	local out, taken = {}, {}
+
+	local tree_at = {}
+	for _, tree in ipairs(trees) do
+		tree_at[tree.dir] = tree
+	end
+
+	-- Agents by where they run, each place in the order of its newest agent.
+	-- One agent is one row, as it always was; two or more get a row for the
+	-- place and are listed under it.
+	local places, order = {}, {}
 	for _, run in ipairs(agent.runs()) do
-		out[#out + 1] = { run = run }
-		-- Including one that has exited, which still speaks for its worktree:
-		-- "finished" says more than "resume", and the row only becomes a
-		-- worktree again once you have forgotten the run.
-		taken[run.cwd] = true
+		local place = places[run.cwd]
+		if not place then
+			place = { dir = run.cwd, runs = {} }
+			places[run.cwd], order[#order + 1] = place, place
+		end
+		place.runs[#place.runs + 1] = run
+	end
+	for _, place in ipairs(order) do
+		if #place.runs == 1 then
+			out[#out + 1] = { run = place.runs[1] }
+		else
+			out[#out + 1] = { place = place, tree = tree_at[place.dir] }
+			for i, run in ipairs(place.runs) do
+				out[#out + 1] = { run = run, under = place, final = i == #place.runs }
+			end
+		end
+		-- Including an agent that has exited, which still speaks for its
+		-- worktree: "finished" says more than "resume".
+		taken[place.dir] = true
+	end
+	-- A place being erased: its agents are gone but git has not finished
+	-- removing it yet, and it must not come back as a row in the meantime.
+	for dir in pairs(erasing) do
+		taken[dir] = true
 	end
 
 	-- A worktree's record is matched by path rather than by project, since a
@@ -231,8 +269,37 @@ local function ago(at)
 end
 
 --- One row as cells. Shared with the sidebar, which drops the wide ones.
+-- Which state a place shows, from the most pressing of its agents.
+local URGENT = { "waiting", "working", "starting", "idle", "exited" }
+
 local function cells(item)
 	local run, tree = item.run, item.tree
+
+	local place = item.place
+	if place then
+		local mark = MARK.idle
+		for _, state in ipairs(URGENT) do
+			if vim.iter(place.runs):any(function(r)
+				return r.status == state
+			end) then
+				mark = MARK[state]
+				break
+			end
+		end
+		if tree then
+			refresh_stat(tree, tree.dir, tree.base)
+		end
+		local stat = tree and tree.stat
+		return {
+			{ text = mark[1], hl = mark[2] },
+			{ text = vim.fn.fnamemodify(place.dir, ":t"), hl = "AgentPlace" },
+			{ text = "", hl = "AgentMeta" },
+			{ text = #place.runs .. " agents", hl = "AgentMeta" },
+			{ text = "", hl = "AgentMeta" },
+			{ text = stat and ("+%d-%d"):format(stat.added, stat.removed) or "", hl = "AgentAdded" },
+			{ text = tree and tree.branch or place.runs[1].where or "", hl = "AgentMeta" },
+		}
+	end
 
 	if tree then
 		refresh_stat(tree, tree.dir, tree.base)
@@ -266,11 +333,12 @@ local function cells(item)
 	end
 
 	-- Only for a run with a worktree of its own. Diffing the checkout you are
-	-- sitting in would report your uncommitted work as the agent's.
-	if run.where then
+	-- sitting in would report your uncommitted work as the agent's. And not
+	-- for one listed under its worktree, whose row already says it for all.
+	if run.where and not item.under then
 		refresh_stat(run, run.cwd, run.base)
 	end
-	local stat = run.stat
+	local stat = not item.under and run.stat or nil
 	local mark = MARK[run.status] or MARK.idle
 	local diff = ""
 	if stat then
@@ -279,12 +347,12 @@ local function cells(item)
 
 	return {
 		{ text = mark[1], hl = mark[2] },
-		{ text = run.name, hl = "AgentRunName" },
+		{ text = item.under and ((item.final and "└ " or "├ ") .. run.name) or run.name, hl = "AgentRunName" },
 		{ text = run.cli, hl = "AgentMeta" },
 		{ text = tostring(run.doing or ""), hl = mark[2] },
 		{ text = agent.elapsed(run), hl = "AgentMeta" },
 		{ text = diff, hl = stat and "AgentAdded" or "AgentMeta" },
-		{ text = run.where or vim.fn.fnamemodify(run.cwd, ":t"), hl = "AgentMeta" },
+		{ text = not item.under and (run.where or vim.fn.fnamemodify(run.cwd, ":t")) or "", hl = "AgentMeta" },
 	}
 end
 
@@ -394,57 +462,84 @@ function M.show_in(item, win)
 		return M.terminal(item.run, win)
 	end
 	win_pick.focus(win)
-	vim.cmd.edit(vim.fn.fnameescape(item.tree and item.tree.dir or item.session.cwd))
+	local dir = (item.tree and item.tree.dir) or (item.place and item.place.dir) or item.session.cwd
+	vim.cmd.edit(vim.fn.fnameescape(dir))
 end
 
---- Remove a worktree, having asked. The branch is a second question, since it
---- is the only remaining copy of anything the agent committed there.
-local function drop_tree(tree)
-	local root = repo()
-	if not root then
+--- Erase a row, at once and without asking: kill whatever runs there, forget
+--- what was remembered about it, and remove the worktree and its branch when
+--- it is one this project made. The checkout you are sitting in, or a worktree
+--- you set up by hand, is never removed, only emptied of agents.
+---
+--- An agent listed under its worktree goes on its own, leaving the rest. Any
+--- other row is the whole place.
+local function erase(item)
+	if item.session then
+		require("agent_store").forget(item.session.id)
+		-- Nothing about a run changed, so nothing else will say so.
+		agent.changed()
 		return
 	end
-	local name = vim.fn.fnamemodify(tree.dir, ":t")
-	local what = tree.stat and (" (+%d-%d uncommitted or unmerged)"):format(tree.stat.added, tree.stat.removed) or ""
-	local answer = vim.fn.confirm("remove worktree " .. name .. what .. "?", "&Worktree\nworktree and &branch\n&Cancel", 3)
-	if answer == 3 or answer == 0 then
+	if item.under then
+		require("agent_store").forget(item.run.id)
+		agent.drop(item.run)
 		return
 	end
-	local branch = answer == 2 and tree.branch or nil
 
-	local ok, err = worktree.remove(root, tree.dir, false, branch)
-	if not ok and tostring(err):find("modified or untracked") then
-		-- git's own refusal, handed back as the question it really is.
-		if vim.fn.confirm(name .. " has changes that are not committed. remove anyway?", "&Remove\n&Keep", 2) ~= 1 then
+	local dir, victims
+	if item.run then
+		dir, victims = item.run.cwd, { item.run }
+	elseif item.place then
+		dir, victims = item.place.dir, vim.list_slice(item.place.runs)
+	else
+		dir, victims = item.tree.dir, {}
+	end
+
+	local root = repo()
+	local ours = root and vim.tbl_contains(worktree.list(root), dir)
+	-- Asked now, while the directory is still there to ask.
+	local branch = ours and worktree.branch(dir) or nil
+
+	-- Off the dashboard now rather than once git is done. Every row that could
+	-- stand for this place is held back until then, and the conversations go
+	-- first, since a resume into a directory that is gone is not a resume.
+	erasing[dir] = true
+	require("agent_store").forget_dir(dir)
+	if ours then
+		known[dir] = nil
+		for i, one in ipairs(trees) do
+			if one.dir == dir then
+				table.remove(trees, i)
+				break
+			end
+		end
+	end
+
+	-- The worktree goes once every agent in it has, so none is left running in
+	-- a directory that has been taken out from under it.
+	local pending = #victims + 1
+	local function gone()
+		pending = pending - 1
+		if pending > 0 then
 			return
 		end
-		ok, err = worktree.remove(root, tree.dir, true, branch)
-	end
-	if not ok then
-		vim.notify("agent: " .. tostring(err), vim.log.levels.ERROR)
-		return
-	end
-	if err then
-		-- Removed, but the branch outlived it: worth saying, not worth failing.
-		vim.notify("agent: " .. tostring(err), vim.log.levels.WARN)
-	end
-	known[tree.dir] = nil
-	-- Off the list now rather than whenever the next listing gets around to
-	-- saying so. The row stands for a directory that has just been deleted,
-	-- and a row you can still put the cursor on is a row you can still press x
-	-- on.
-	for i, one in ipairs(trees) do
-		if one.dir == tree.dir then
-			table.remove(trees, i)
-			break
+		if ours then
+			local ok, err = worktree.remove(root, dir, true, branch)
+			if not ok then
+				vim.notify("agent: " .. tostring(err), vim.log.levels.ERROR)
+			elseif err then
+				-- Removed, but the branch outlived it: worth saying, not worth failing.
+				vim.notify("agent: " .. tostring(err), vim.log.levels.WARN)
+			end
 		end
+		erasing[dir] = nil
+		refresh_trees(true)
+		agent.changed()
 	end
-	-- The conversations were about work that no longer exists anywhere, and a
-	-- resume into a directory that is gone is not a resume.
-	require("agent_store").forget_dir(tree.dir)
-	refresh_trees(true)
-	agent.changed()
-	vim.notify("agent: removed " .. name)
+	for _, run in ipairs(victims) do
+		agent.drop(run, gone)
+	end
+	gone()
 end
 
 local function keys(into)
@@ -533,26 +628,10 @@ local function keys(into)
 
 	map("x", function()
 		local item = current()
-		if not item then
-			return
+		if item then
+			erase(item)
 		end
-		if item.tree then
-			return drop_tree(item.tree)
-		end
-		if item.session then
-			require("agent_store").forget(item.session.id)
-			-- Nothing about a run changed, so nothing else will say so.
-			agent.changed()
-			return
-		end
-		-- An agent first, its worktree second. Forgetting the run leaves the
-		-- worktree behind as a row of its own, which is the point: dropping the
-		-- process and dropping the work are different decisions, and the second
-		-- one should be made looking at what the work was.
-		if not agent.forget(item.run) then
-			vim.notify("agent: " .. item.run.name .. " is still running, stop it first", vim.log.levels.WARN)
-		end
-	end, "Forget an agent that has exited, or remove a worktree")
+	end, "Erase this: kill the agent, forget it, remove its worktree and branch")
 
 	map("q", function()
 		vim.cmd("close")
@@ -602,7 +681,7 @@ function M.open(run)
 		-- row you are on stay the same question: a legend on line one would put
 		-- every agent one line further down than the list says it is.
 		vim.wo[win].winbar =
-			"%#AgentMeta# <CR> open   d diff   i say   a start   n worktree   r resume   s stop   x drop   q close"
+			"%#AgentMeta# <CR> open   d diff   i say   a start   n worktree   r resume   s stop   x erase   q close"
 	end
 	M.render(into, M.WIDE)
 

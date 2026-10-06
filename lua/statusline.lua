@@ -34,8 +34,9 @@ function _G._statusline()
 	end
 
 	local lsp = require("lspstatus").component()
+	local agents = require("agent_toast").component()
 
-	return "%#StlMode# " .. mode .. " %*" .. branch .. " " .. path .. "%=" .. diag .. lsp .. vim.bo.filetype .. " %l:%c"
+	return "%#StlMode# " .. mode .. " %*" .. branch .. " " .. path .. "%=" .. agents .. diag .. lsp .. vim.bo.filetype .. " %l:%c"
 end
 
 vim.api.nvim_create_autocmd("BufEnter", {

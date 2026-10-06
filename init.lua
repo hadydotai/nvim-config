@@ -20,6 +20,7 @@ require("agent_project")
 require("agent_dash")
 require("agent_review")
 require("agent_sidebar")
+require("agent_toast") -- the note when one is done or needs you
 require("buffers")
 require("symbols")
 require("diagnostics") -- after keymap.lua: mapleader has to be set before <leader>q

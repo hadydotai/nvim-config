@@ -234,6 +234,12 @@ function M.remove(repo, dir, force, branch)
 	return true
 end
 
+--- The branch checked out in `dir`, or nil when HEAD is detached there.
+function M.branch(dir)
+	local ok, out = git({ "branch", "--show-current" }, dir)
+	return ok and out ~= "" and out or nil
+end
+
 local function shortstat(text)
 	return {
 		files = tonumber(text:match("(%d+) files? changed")) or 0,

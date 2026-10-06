@@ -334,6 +334,11 @@ and what to ask.
 `<leader>ad` is the dashboard, a row per piece of work rather than per process.
 `<leader>ae` is the same list as a column narrow enough to leave open.
 
+When one finishes its turn, asks permission or exits partway through, a note
+appears in the top-right corner, the bell rings and the statusline counts it.
+`<leader>ao` opens the newest, `<leader>ax` puts the note away. It never takes
+focus, so no other key is affected.
+
 Status comes from the agents themselves through their hooks rather than from
 watching their output, and nothing is installed into `~/.claude`, `~/.codex` or
 `~/.grok` to arrange it.
@@ -343,14 +348,16 @@ watching their output, and nothing is installed into `~/.claude`, `~/.codex` or
 			{ "<leader>ac", "Send this file, line, selection or diagnostics to one running" },
 			{ "<leader>ad", "The dashboard: every agent and what it is doing" },
 			{ "<leader>ae", "The sidebar: the same, in a column" },
+			{ "<leader>ao", "Open the newest agent that is done or needs you" },
+			{ "<leader>ax", "Dismiss the note saying so" },
 			{ "<CR>", "Open this agent's terminal in a window you pick", scope = "the dashboard" },
 			{ "d", "Read what changed here, as a diff", scope = "the dashboard" },
 			{ "i", "Say a line to this agent without opening it", scope = "the dashboard" },
 			{ "a", "Start an agent, in this worktree when the cursor is on one", scope = "the dashboard" },
 			{ "n", "Make a worktree", scope = "the dashboard" },
 			{ "r", "Resume an agent you left behind", scope = "the dashboard" },
-			{ "s", "Stop this agent", scope = "the dashboard" },
-			{ "x", "Forget an exited agent, or remove a worktree", scope = "the dashboard" },
+			{ "s", "Stop this agent, keeping it to resume", scope = "the dashboard" },
+			{ "x", "Erase it: kill, forget, remove its worktree and branch", scope = "the dashboard" },
 		},
 	},
 
