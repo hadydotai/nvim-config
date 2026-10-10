@@ -414,6 +414,10 @@ function M.item(item)
   if not item then
     return
   end
+  if item.run and item.run.remote and not item.run.remote.local_dir(item.run) then
+    vim.notify(("agent: %s works on another machine; its Review column has what it changed"):format(item.run.name), vim.log.levels.WARN)
+    return
+  end
   if item.run then
     return M.show({
       dir = item.run.cwd,

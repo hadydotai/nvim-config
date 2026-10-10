@@ -199,10 +199,13 @@ function M.items()
   -- place and are listed under it.
   local places, order = {}, {}
   for _, run in ipairs(agent.runs()) do
-    local place = places[run.cwd]
+    -- One with no directory (a board's agent that works inside its own
+    -- column) shares a place with nobody.
+    local at = run.cwd ~= "" and run.cwd or run.id
+    local place = places[at]
     if not place then
       place = { dir = run.cwd, runs = {} }
-      places[run.cwd], order[#order + 1] = place, place
+      places[at], order[#order + 1] = place, place
     end
     place.runs[#place.runs + 1] = run
   end
@@ -440,6 +443,10 @@ end
 --- Show a run's terminal. Terminal buffers are kept alive hidden, so this is
 --- only ever a matter of putting an existing one in a window.
 function M.terminal(run, win)
+  -- A board's agent has no terminal in here; its conversation stands in.
+  if run and run.remote then
+    return run.remote.show(run, win)
+  end
   if not run or not run.buf or not vim.api.nvim_buf_is_valid(run.buf) then
     return
   end
@@ -482,6 +489,12 @@ local function erase(item)
   end
   if item.under then
     require("agent_store").forget(item.run.id)
+    agent.drop(item.run)
+    return
+  end
+  -- A board's agent is its column, closed; where it worked is the board's
+  -- to keep or remove, and nothing here wrote it down.
+  if item.run and item.run.remote then
     agent.drop(item.run)
     return
   end

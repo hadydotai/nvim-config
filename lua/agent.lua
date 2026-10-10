@@ -18,6 +18,7 @@
 --   M.send(run, text)             type into it
 --   M.drop(run, done)             kill it and forget it, in one go
 --   M.watch(fn)                   call fn whenever anything changes
+--   M.adopt(run)                  show one that runs elsewhere (a board's)
 --
 -- One thing to know: an agent is a child of this Neovim, so quitting Neovim
 -- ends it. Agents do not outlive the editor the way a tmux pane would.
@@ -80,6 +81,26 @@ end
 
 function M.get(id)
   return runs[id]
+end
+
+--- Take on a run that lives somewhere else - a board's agent, when this
+--- Neovim is in an Orven terminal (see agent_board.lua) - or update one
+--- already taken on. Its `remote` answers for it: send(run, text),
+--- drop(run, done), stop(run), show(run, win). Its owner keeps status, doing
+--- and since current, and calls M.changed() once it is done updating.
+function M.adopt(run)
+  if not runs[run.id] then
+    order = order + 1
+    run.order = order
+    runs[run.id] = run
+  end
+end
+
+--- Let one go that adopt() took on, without touching what it is.
+function M.release(id)
+  if runs[id] and runs[id].remote then
+    runs[id] = nil
+  end
 end
 
 function M.problems()
@@ -357,6 +378,9 @@ end
 --- message with a fenced block in it arrives whole, and only the CR below
 --- submits it. Measured against a real one, not assumed.
 function M.send(run, text, submit)
+  if run and run.remote then
+    return run.remote.send(run, text)
+  end
   if not run or not run.chan or run.status == "exited" then
     return false
   end
@@ -371,6 +395,9 @@ end
 
 --- Stop an agent. Terminating rather than killing so it can save its session.
 function M.stop(run)
+  if run and run.remote then
+    return run.remote.stop(run)
+  end
   if run and run.job and run.status ~= "exited" then
     -- So that its exit reads as yours rather than as news.
     run.stopped = true
@@ -392,6 +419,11 @@ function M.drop(run, done)
   end
   run.dropped = true
   runs[run.id] = nil
+  if run.remote then
+    run.remote.drop(run, done)
+    changed()
+    return
+  end
 
   local finished = false
   local function finish()

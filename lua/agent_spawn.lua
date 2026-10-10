@@ -20,6 +20,7 @@
 local M = {}
 
 local agent = require("agent")
+local board = require("agent_board")
 local cli = require("agent_cli")
 local context = require("agent_context")
 local picker = require("picker")
@@ -62,6 +63,10 @@ end
 ---   ctx       from agent_context.here(), plus an optional prebuilt text
 ---   place     where to run it: { dir, branch, name, base }, or nil for here
 function M.start(opts)
+  -- On a board the agent is a column beside this terminal (agent_board.lua).
+  if board.on() then
+    return board.start(opts)
+  end
   local name = opts.name or name_for(opts.question, opts.cli)
   local place = opts.place
 
@@ -147,8 +152,15 @@ end
 --- what gets sent along without asking. `place` is where it will run, which
 --- the dashboard passes when the cursor is on a worktree, and which <C-w>
 --- below is for the rest of the time.
-function M.show(visual, place)
-  local available = cli.available()
+function M.show(visual, place, available)
+  -- On a board what it can run is the board's to say, and asking takes a
+  -- moment, so the dialog opens once it has.
+  if board.on() and not available then
+    return board.harnesses(function(items)
+      M.show(visual, place, items)
+    end)
+  end
+  available = available or cli.available()
   if #available == 0 then
     vim.notify("agent: none of claude, codex or grok are installed", vim.log.levels.WARN)
     return
@@ -199,7 +211,7 @@ function M.show(visual, place)
       -- out of step.
       ["<C-w>"] = function()
         worktree.choose(root, function(chosen)
-          M.show(visual, chosen.dir ~= vim.fn.getcwd() and chosen or nil)
+          M.show(visual, chosen.dir ~= vim.fn.getcwd() and chosen or nil, board.on() and available or nil)
         end)
       end,
     },

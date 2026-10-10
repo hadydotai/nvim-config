@@ -73,6 +73,8 @@ taking a mapping away and by adding one nobody wrote up.
 | `lua/agent_project.lua` | `<leader>aw`, what a new worktree needs to build |
 | `lua/agent_tree.lua` | picking that from the project tree rather than typing it |
 | `lua/agent_context.lua` | the file, line or selection an agent is asked about |
+| `lua/agent_board.lua` | on an Orven board: its agents on the dashboard, started as columns |
+| `lua/debug_board.lua` | on an Orven board: `<leader>x`, its Debugger column's keys |
 | `lsp/*.lua`          | one file per language server                        |
 | `.data/ .state/ .cache/` | generated, gitignored: plugins, parsers, undo, logs |
 
@@ -571,6 +573,61 @@ conversation grows past the window and can be scrolled.
 Agents are children of this Neovim, so quitting ends them. A tmux pane would
 survive and this does not; if that matters, the agent is a normal CLI and
 running it in a terminal remains the way to outlive the editor.
+
+## On an Orven board
+
+In a terminal column of an [Orven](https://orven.sh) board, Neovim is on the
+board too. The runner puts its own Neovim package on `$XDG_DATA_DIRS` in every
+terminal column, and `lua/agent_board.lua` asks it whether this is one. Off a
+board the package is not there, or says no, and nothing below happens.
+
+### Agents
+
+The board's agents are on the dashboard, the sidebar and the note beside the
+ones this editor runs, with the same marks and the same keys. They are adopted
+rather than spawned: `agent.lua` keeps them as runs with a `remote` that says
+how to reach one, and the views never ask which kind a row is.
+
+What changes is where a new one goes. On a board `<leader>aa` opens an agent
+column beside this terminal, in this directory or the worktree `<C-w>` picked,
+and the dialog lists the harnesses the board offers rather than the CLIs
+installed here. It outlives this editor and the browser shows it like any
+other column. A hidden terminal agent is what you get off a board.
+
+On a board agent's row, `<CR>` opens its conversation instead of a terminal,
+kept current while it is on screen. `i` and `<leader>ac` say something to it
+through the board, `d` and `<leader>ar` read the diff in its directory (one on
+another machine has its changes in its Review column), and `x` closes its
+column, which puts the conversation in the board's archive. `s` does nothing:
+a board agent stops from its column.
+
+The package maps its own keys and shows its own notes for a configuration with
+neither. This one has both, so it sets `vim.g.orven_keys` and
+`vim.g.orven_notes` to false. `:Orven` and `:checkhealth orven` stay.
+
+### The Debugger
+
+The runner's Debugger brings a package of its own, which Orven's loads on a
+board. It follows the Debugger column linked under this terminal: its
+breakpoints are signs in the files they are in (and say why when the debugger
+could not set one), and the line the program is paused at is lit, with the
+editor taken there as it steps. The stack, the variables and evaluating stay in
+the column.
+
+Its own keys are under `<leader>d`, which is the next diagnostic here, so
+`lua/debug_board.lua` maps the same letters under `<leader>x`:
+
+| key | what |
+| --- | --- |
+| `<leader>xb` | a breakpoint on this line, or none |
+| `<leader>xB` | one that stops only if a condition holds |
+| `<leader>xl` | one that logs a message instead of stopping |
+| `<leader>xc` `xn` `xi` `xo` | go on, step over, into, out |
+| `<leader>xp` `xS` `xR` | pause, stop, restart |
+| `<leader>xd` | debug a command, in a Debugger column |
+| `<leader>xs` | show this line in it |
+
+`:Orven debug` has the rest, a Processes process among them.
 
 ## Pairs
 

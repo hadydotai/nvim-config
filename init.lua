@@ -15,6 +15,8 @@ require("pairs")
 require("find")
 require("grep")
 require("agent").setup() -- coding agents: spawn, track, talk to
+require("agent_board").setup() -- on an Orven board: its agents, beside ours
+require("debug_board").setup() -- and its Debugger column's keys
 require("agent_spawn")
 require("agent_project")
 require("agent_dash")

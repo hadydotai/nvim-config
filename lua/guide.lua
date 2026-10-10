@@ -362,6 +362,48 @@ watching their output, and nothing is installed into `~/.claude`, `~/.codex` or
   },
 
   {
+    id = "board",
+    title = "On an Orven board",
+    body = [==[
+In a terminal column of an Orven board, the board's agents are on the
+dashboard, the sidebar and the note with the ones this editor runs, and they
+answer to the same keys. `<leader>aa` opens a new one as a column beside this
+terminal rather than a hidden one in here, so it outlives the editor.
+
+On a board agent's row `<CR>` opens its conversation, `i` says something to it
+and `x` closes its column. `s` does nothing to one: it stops from its column.
+
+When the board's Debugger brings its part, a breakpoint is a sign in the
+file you set it in, saying why when the debugger could not set it, and the
+line the program is paused at is lit and followed as it moves. The stack,
+the variables and evaluating stay in the Debugger column. Its keys are under
+`<leader>x`, since `<leader>d` is the next diagnostic.
+
+`:Orven` lists what the board adds, and `:checkhealth orven` says what of it
+works. Off a board none of this is here.
+]==],
+    -- Mapped only on a board, so shown and never checked.
+    covers = {
+      "<leader>xb", "<leader>xB", "<leader>xl", "<leader>xc", "<leader>xn", "<leader>xi",
+      "<leader>xo", "<leader>xp", "<leader>xS", "<leader>xR", "<leader>xd", "<leader>xs",
+    },
+    keys = {
+      { "<leader>xb", "A breakpoint on this line, or none", scope = "on a board" },
+      { "<leader>xB", "One that stops only if a condition holds", scope = "on a board" },
+      { "<leader>xl", "One that logs a message instead of stopping", scope = "on a board" },
+      { "<leader>xc", "Go on", scope = "on a board" },
+      { "<leader>xn", "Step over", scope = "on a board" },
+      { "<leader>xi", "Step into", scope = "on a board" },
+      { "<leader>xo", "Step out", scope = "on a board" },
+      { "<leader>xp", "Pause", scope = "on a board" },
+      { "<leader>xS", "Stop", scope = "on a board" },
+      { "<leader>xR", "Restart", scope = "on a board" },
+      { "<leader>xd", "Debug a command, in a Debugger column", scope = "on a board" },
+      { "<leader>xs", "Show this line in the Debugger", scope = "on a board" },
+    },
+  },
+
+  {
     id = "worktrees",
     title = "Worktrees",
     body = [==[
