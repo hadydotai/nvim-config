@@ -16,38 +16,38 @@
 local LANGUAGES = { "python", "typescript", "tsx", "javascript", "go", "rust", "odin" }
 
 vim.pack.add({
-	{
-		src = "https://github.com/nvim-treesitter/nvim-treesitter",
-		version = "main", -- master is a different, frozen plugin, not an older one
-	},
+  {
+    src = "https://github.com/nvim-treesitter/nvim-treesitter",
+    version = "main", -- master is a different, frozen plugin, not an older one
+  },
 })
 
 -- Covers both the parsers Neovim bundles and the ones we installed, since both
 -- sit on the runtimepath.
 local function installed(lang)
-	return #vim.api.nvim_get_runtime_file("parser/" .. lang .. ".so", false) > 0
+  return #vim.api.nvim_get_runtime_file("parser/" .. lang .. ".so", false) > 0
 end
 
 local missing = vim.tbl_filter(function(lang)
-	return not installed(lang)
+  return not installed(lang)
 end, LANGUAGES)
 
 if #missing > 0 then
-	require("nvim-treesitter").install(missing)
+  require("nvim-treesitter").install(missing)
 end
 
 vim.api.nvim_create_autocmd("FileType", {
-	group = vim.api.nvim_create_augroup("Treesitter", { clear = true }),
-	callback = function(ev)
-		-- The lua/markdown/help/query ftplugins start treesitter themselves, and
-		-- vim.treesitter.start() stacks a second highlighter rather than noticing
-		-- one is already running.
-		if vim.treesitter.highlighter.active[ev.buf] then
-			return
-		end
-		local lang = vim.treesitter.language.get_lang(ev.match)
-		if lang and installed(lang) then
-			pcall(vim.treesitter.start, ev.buf, lang)
-		end
-	end,
+  group = vim.api.nvim_create_augroup("Treesitter", { clear = true }),
+  callback = function(ev)
+    -- The lua/markdown/help/query ftplugins start treesitter themselves, and
+    -- vim.treesitter.start() stacks a second highlighter rather than noticing
+    -- one is already running.
+    if vim.treesitter.highlighter.active[ev.buf] then
+      return
+    end
+    local lang = vim.treesitter.language.get_lang(ev.match)
+    if lang and installed(lang) then
+      pcall(vim.treesitter.start, ev.buf, lang)
+    end
+  end,
 })

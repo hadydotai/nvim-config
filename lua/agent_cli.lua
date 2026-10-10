@@ -55,11 +55,11 @@ M.HOOK = M.BIN .. "/agent-hook"
 -- hence both it and PermissionRequest. Each CLI skips the names it does not
 -- know, which is what makes one spec work for three.
 local EVENTS = {
-	{ event = "UserPromptSubmit" },
-	{ event = "PostToolUse" },
-	{ event = "Notification", matcher = "permission_prompt|elicitation_dialog" },
-	{ event = "PermissionRequest" },
-	{ event = "Stop" },
+  { event = "UserPromptSubmit" },
+  { event = "PostToolUse" },
+  { event = "Notification", matcher = "permission_prompt|elicitation_dialog" },
+  { event = "PermissionRequest" },
+  { event = "Stop" },
 }
 
 -- One process per hook, so this is a shell script rather than anything richer.
@@ -133,51 +133,51 @@ exit 0
 
 --- Hook groups in the shared JSON shape, pointing at our script.
 local function hook_groups()
-	local hooks = {}
-	for _, spec in ipairs(EVENTS) do
-		local group = { hooks = { { type = "command", command = M.HOOK .. " " .. spec.event } } }
-		if spec.matcher then
-			group.matcher = spec.matcher
-		end
-		hooks[spec.event] = { group }
-	end
-	return hooks
+  local hooks = {}
+  for _, spec in ipairs(EVENTS) do
+    local group = { hooks = { { type = "command", command = M.HOOK .. " " .. spec.event } } }
+    if spec.matcher then
+      group.matcher = spec.matcher
+    end
+    hooks[spec.event] = { group }
+  end
+  return hooks
 end
 
 local function write(path, text)
-	local f = io.open(path, "w")
-	if not f then
-		return false
-	end
-	f:write(text)
-	f:close()
-	return true
+  local f = io.open(path, "w")
+  if not f then
+    return false
+  end
+  f:write(text)
+  f:close()
+  return true
 end
 
 local function read(path)
-	local f = io.open(path, "r")
-	if not f then
-		return nil
-	end
-	local text = f:read("*a")
-	f:close()
-	return text
+  local f = io.open(path, "r")
+  if not f then
+    return nil
+  end
+  local text = f:read("*a")
+  f:close()
+  return text
 end
 
 --- Write the hook script, but only when it would change. Codex trusts a
 --- command once and remembers; rewriting an identical file is harmless, but
 --- being able to see that it did not change is worth the read.
 local function install_script()
-	vim.fn.mkdir(M.BIN, "p")
-	vim.fn.mkdir(M.INBOX, "p")
-	local want = SCRIPT:gsub("@INBOX@", M.INBOX)
-	if read(M.HOOK) ~= want then
-		if not write(M.HOOK, want) then
-			return false, "could not write " .. M.HOOK
-		end
-	end
-	vim.fn.setfperm(M.HOOK, "rwxr-xr-x")
-	return true
+  vim.fn.mkdir(M.BIN, "p")
+  vim.fn.mkdir(M.INBOX, "p")
+  local want = SCRIPT:gsub("@INBOX@", M.INBOX)
+  if read(M.HOOK) ~= want then
+    if not write(M.HOOK, want) then
+      return false, "could not write " .. M.HOOK
+    end
+  end
+  vim.fn.setfperm(M.HOOK, "rwxr-xr-x")
+  return true
 end
 
 --- A directory that stands in for a CLI's real home: every entry symlinked
@@ -185,26 +185,26 @@ end
 --- so a new file in the real home shows up, and anything the CLI has written
 --- into the mirror (codex keeps its hook trust here) survives.
 local function mirror(real, into, ours)
-	if vim.fn.isdirectory(real) == 0 then
-		return false, real .. " does not exist"
-	end
-	vim.fn.mkdir(into, "p")
-	local own = {}
-	for _, name in ipairs(ours) do
-		own[name] = true
-	end
-	for _, path in ipairs(vim.fn.readdir(real)) do
-		if not own[path] then
-			local link = into .. "/" .. path
-			-- getftype follows the link, so a dangling one reads as absent and
-			-- is replaced rather than left broken.
-			if vim.fn.getftype(link) == "" then
-				vim.fn.delete(link)
-				vim.uv.fs_symlink(real .. "/" .. path, link)
-			end
-		end
-	end
-	return true
+  if vim.fn.isdirectory(real) == 0 then
+    return false, real .. " does not exist"
+  end
+  vim.fn.mkdir(into, "p")
+  local own = {}
+  for _, name in ipairs(ours) do
+    own[name] = true
+  end
+  for _, path in ipairs(vim.fn.readdir(real)) do
+    if not own[path] then
+      local link = into .. "/" .. path
+      -- getftype follows the link, so a dangling one reads as absent and
+      -- is replaced rather than left broken.
+      if vim.fn.getftype(link) == "" then
+        vim.fn.delete(link)
+        vim.uv.fs_symlink(real .. "/" .. path, link)
+      end
+    end
+  end
+  return true
 end
 
 --- A version 4 UUID, which is the shape claude and grok both insist on for a
@@ -212,20 +212,20 @@ end
 --- conversation is known by a name we chose and wrote down, so it can be
 --- picked up again after Neovim has been closed and the process is long gone.
 function M.uuid()
-	local bytes = { string.byte(vim.uv.random(16), 1, 16) }
-	bytes[7] = bit.bor(bit.band(bytes[7], 0x0f), 0x40)
-	bytes[9] = bit.bor(bit.band(bytes[9], 0x3f), 0x80)
-	local hex = {}
-	for i, byte in ipairs(bytes) do
-		hex[i] = ("%02x"):format(byte)
-	end
-	return table.concat({
-		table.concat(hex, "", 1, 4),
-		table.concat(hex, "", 5, 6),
-		table.concat(hex, "", 7, 8),
-		table.concat(hex, "", 9, 10),
-		table.concat(hex, "", 11, 16),
-	}, "-")
+  local bytes = { string.byte(vim.uv.random(16), 1, 16) }
+  bytes[7] = bit.bor(bit.band(bytes[7], 0x0f), 0x40)
+  bytes[9] = bit.bor(bit.band(bytes[9], 0x3f), 0x80)
+  local hex = {}
+  for i, byte in ipairs(bytes) do
+    hex[i] = ("%02x"):format(byte)
+  end
+  return table.concat({
+    table.concat(hex, "", 1, 4),
+    table.concat(hex, "", 5, 6),
+    table.concat(hex, "", 7, 8),
+    table.concat(hex, "", 9, 10),
+    table.concat(hex, "", 11, 16),
+  }, "-")
 end
 
 --------------------------------------------------------------------------- --
@@ -233,197 +233,197 @@ end
 --------------------------------------------------------------------------- --
 
 local CLIS = {
-	{
-		name = "claude",
-		label = "Claude Code",
-		bin = "claude",
-		-- Takes a session id of our choosing, so a run can be resumed by name.
-		mints = true,
-		-- No flag for the alternate screen, but an environment variable for it.
-		-- See `inline` and env below.
-		inline = true,
-		-- A flag, so there is no home to mirror and nothing installed at all.
-		prepare = function(self)
-			local path = DATA .. "/claude-settings.json"
-			local ok = write(path, vim.json.encode({ hooks = hook_groups() }))
-			if not ok then
-				return false, "could not write " .. path
-			end
-			self.settings = path
-			return true
-		end,
-		-- Draw inline instead of taking the alternate screen, so the
-		-- conversation scrolls off into the terminal buffer and can be read
-		-- back there. claude's own issue tracker says this variable does not
-		-- exist, which was true of the version that filed it; it is honoured by
-		-- 2.1.233, measured by watching whether ESC[?1049h ever goes out.
-		-- Should a later version drop it, claude takes the alternate screen
-		-- again and nothing else here is affected.
-		env = function()
-			return { CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = "1" }
-		end,
-		argv = function(self, run)
-			local argv = { self.bin }
-			if self.settings then
-				vim.list_extend(argv, { "--settings", self.settings })
-			end
-			-- Resuming keeps the id rather than minting a new one, which is
-			-- what --fork-session would do, so the name we wrote down stays
-			-- good for every resume after this one.
-			if run.resume then
-				vim.list_extend(argv, { "--resume", run.resume })
-			elseif run.session_id then
-				vim.list_extend(argv, { "--session-id", run.session_id })
-			end
-			if run.prompt then
-				argv[#argv + 1] = run.prompt
-			end
-			return argv
-		end,
-	},
+  {
+    name = "claude",
+    label = "Claude Code",
+    bin = "claude",
+    -- Takes a session id of our choosing, so a run can be resumed by name.
+    mints = true,
+    -- No flag for the alternate screen, but an environment variable for it.
+    -- See `inline` and env below.
+    inline = true,
+    -- A flag, so there is no home to mirror and nothing installed at all.
+    prepare = function(self)
+      local path = DATA .. "/claude-settings.json"
+      local ok = write(path, vim.json.encode({ hooks = hook_groups() }))
+      if not ok then
+        return false, "could not write " .. path
+      end
+      self.settings = path
+      return true
+    end,
+    -- Draw inline instead of taking the alternate screen, so the
+    -- conversation scrolls off into the terminal buffer and can be read
+    -- back there. claude's own issue tracker says this variable does not
+    -- exist, which was true of the version that filed it; it is honoured by
+    -- 2.1.233, measured by watching whether ESC[?1049h ever goes out.
+    -- Should a later version drop it, claude takes the alternate screen
+    -- again and nothing else here is affected.
+    env = function()
+      return { CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = "1" }
+    end,
+    argv = function(self, run)
+      local argv = { self.bin }
+      if self.settings then
+        vim.list_extend(argv, { "--settings", self.settings })
+      end
+      -- Resuming keeps the id rather than minting a new one, which is
+      -- what --fork-session would do, so the name we wrote down stays
+      -- good for every resume after this one.
+      if run.resume then
+        vim.list_extend(argv, { "--resume", run.resume })
+      elseif run.session_id then
+        vim.list_extend(argv, { "--session-id", run.session_id })
+      end
+      if run.prompt then
+        argv[#argv + 1] = run.prompt
+      end
+      return argv
+    end,
+  },
 
-	{
-		name = "codex",
-		label = "Codex",
-		bin = "codex",
-		-- Codex will not run a hook it has not been told to trust, and asks
-		-- once per home. That is the reason this mirror is kept rather than
-		-- built per run: trust is recorded here, so you answer it once.
-		note = "codex asks you to trust these hooks the first time it starts. Choose 'Trust all and continue'; it is remembered.",
-		-- Codex names its own conversations, so the id is found rather than
-		-- chosen (see resume_id below).
-		mints = false,
-		inline = true,
-		prepare = function(self)
-			local home = DATA .. "/codex-home"
-			local ok, err = mirror(vim.env.HOME .. "/.codex", home, { "hooks.json" })
-			if not ok then
-				return false, err
-			end
-			if not write(home .. "/hooks.json", vim.json.encode({ hooks = hook_groups() })) then
-				return false, "could not write " .. home .. "/hooks.json"
-			end
-			self.home = home
-			return true
-		end,
-		env = function(self)
-			return self.home and { CODEX_HOME = self.home } or {}
-		end,
-		argv = function(self, run)
-			local argv = { self.bin }
-			-- A subcommand, so it has to lead.
-			if run.resume then
-				vim.list_extend(argv, { "resume", run.resume })
-			end
-			argv[#argv + 1] = "--no-alt-screen"
-			if run.prompt then
-				argv[#argv + 1] = run.prompt
-			end
-			return argv
-		end,
-		--- The conversation codex last had in `cwd`, or nil.
-		---
-		--- Codex mints its own id and does not tell us one, so it is looked up
-		--- instead: every session is a rollout file whose first line records
-		--- the directory it was started in, and whose name ends in the id. The
-		--- files are laid out by date, so walking them newest first finds the
-		--- one we mean without reading many.
-		---
-		--- Late rather than at launch on purpose: a lookup done now also finds
-		--- a codex you started in that worktree from an ordinary terminal.
-		resume_id = function(self, cwd)
-			local root = (self.home or (vim.env.HOME .. "/.codex")) .. "/sessions"
-			local files = vim.fn.glob(root .. "/*/*/*/rollout-*.jsonl", true, true)
-			table.sort(files, function(a, b)
-				return a > b
-			end)
-			for i, path in ipairs(files) do
-				if i > 200 then
-					break
-				end
-				local f = io.open(path, "r")
-				if f then
-					local first = f:read("*l") or ""
-					f:close()
-					local ok, meta = pcall(vim.json.decode, first)
-					local payload = ok and type(meta) == "table" and meta.payload or nil
-					if payload and payload.cwd == cwd and payload.session_id then
-						return payload.session_id
-					end
-				end
-			end
-			return nil
-		end,
-	},
+  {
+    name = "codex",
+    label = "Codex",
+    bin = "codex",
+    -- Codex will not run a hook it has not been told to trust, and asks
+    -- once per home. That is the reason this mirror is kept rather than
+    -- built per run: trust is recorded here, so you answer it once.
+    note = "codex asks you to trust these hooks the first time it starts. Choose 'Trust all and continue'; it is remembered.",
+    -- Codex names its own conversations, so the id is found rather than
+    -- chosen (see resume_id below).
+    mints = false,
+    inline = true,
+    prepare = function(self)
+      local home = DATA .. "/codex-home"
+      local ok, err = mirror(vim.env.HOME .. "/.codex", home, { "hooks.json" })
+      if not ok then
+        return false, err
+      end
+      if not write(home .. "/hooks.json", vim.json.encode({ hooks = hook_groups() })) then
+        return false, "could not write " .. home .. "/hooks.json"
+      end
+      self.home = home
+      return true
+    end,
+    env = function(self)
+      return self.home and { CODEX_HOME = self.home } or {}
+    end,
+    argv = function(self, run)
+      local argv = { self.bin }
+      -- A subcommand, so it has to lead.
+      if run.resume then
+        vim.list_extend(argv, { "resume", run.resume })
+      end
+      argv[#argv + 1] = "--no-alt-screen"
+      if run.prompt then
+        argv[#argv + 1] = run.prompt
+      end
+      return argv
+    end,
+    --- The conversation codex last had in `cwd`, or nil.
+    ---
+    --- Codex mints its own id and does not tell us one, so it is looked up
+    --- instead: every session is a rollout file whose first line records
+    --- the directory it was started in, and whose name ends in the id. The
+    --- files are laid out by date, so walking them newest first finds the
+    --- one we mean without reading many.
+    ---
+    --- Late rather than at launch on purpose: a lookup done now also finds
+    --- a codex you started in that worktree from an ordinary terminal.
+    resume_id = function(self, cwd)
+      local root = (self.home or (vim.env.HOME .. "/.codex")) .. "/sessions"
+      local files = vim.fn.glob(root .. "/*/*/*/rollout-*.jsonl", true, true)
+      table.sort(files, function(a, b)
+        return a > b
+      end)
+      for i, path in ipairs(files) do
+        if i > 200 then
+          break
+        end
+        local f = io.open(path, "r")
+        if f then
+          local first = f:read("*l") or ""
+          f:close()
+          local ok, meta = pcall(vim.json.decode, first)
+          local payload = ok and type(meta) == "table" and meta.payload or nil
+          if payload and payload.cwd == cwd and payload.session_id then
+            return payload.session_id
+          end
+        end
+      end
+      return nil
+    end,
+  },
 
-	{
-		name = "grok",
-		label = "Grok",
-		bin = "grok",
-		mints = true,
-		inline = true,
-		-- Grok has no settings flag, so the same mirror trick, with the hooks
-		-- appended to a copy of config.toml. Its own config is read rather
-		-- than linked so the copy keeps whatever you have set.
-		prepare = function(self)
-			local home = DATA .. "/grok-home"
-			local ok, err = mirror(vim.env.HOME .. "/.grok", home, { "config.toml" })
-			if not ok then
-				return false, err
-			end
-			local base = read(vim.env.HOME .. "/.grok/config.toml") or ""
-			local toml = { base, "", "# Added by Neovim (lua/agent_cli.lua). Not your config." }
-			for _, spec in ipairs(EVENTS) do
-				toml[#toml + 1] = ("[[hooks.%s]]"):format(spec.event)
-				if spec.matcher then
-					toml[#toml + 1] = ('matcher = "%s"'):format(spec.matcher)
-				end
-				toml[#toml + 1] = ('hooks = [ { type = "command", command = "%s %s" } ]'):format(M.HOOK, spec.event)
-			end
-			if not write(home .. "/config.toml", table.concat(toml, "\n") .. "\n") then
-				return false, "could not write " .. home .. "/config.toml"
-			end
-			self.home = home
-			return true
-		end,
-		env = function(self)
-			return self.home and { GROK_HOME = self.home } or {}
-		end,
-		argv = function(self, run)
-			local argv = { self.bin }
-			if run.resume then
-				vim.list_extend(argv, { "--resume", run.resume })
-			elseif run.session_id then
-				vim.list_extend(argv, { "--session-id", run.session_id })
-			end
-			argv[#argv + 1] = "--no-alt-screen"
-			if run.prompt then
-				argv[#argv + 1] = run.prompt
-			end
-			return argv
-		end,
-	},
+  {
+    name = "grok",
+    label = "Grok",
+    bin = "grok",
+    mints = true,
+    inline = true,
+    -- Grok has no settings flag, so the same mirror trick, with the hooks
+    -- appended to a copy of config.toml. Its own config is read rather
+    -- than linked so the copy keeps whatever you have set.
+    prepare = function(self)
+      local home = DATA .. "/grok-home"
+      local ok, err = mirror(vim.env.HOME .. "/.grok", home, { "config.toml" })
+      if not ok then
+        return false, err
+      end
+      local base = read(vim.env.HOME .. "/.grok/config.toml") or ""
+      local toml = { base, "", "# Added by Neovim (lua/agent_cli.lua). Not your config." }
+      for _, spec in ipairs(EVENTS) do
+        toml[#toml + 1] = ("[[hooks.%s]]"):format(spec.event)
+        if spec.matcher then
+          toml[#toml + 1] = ('matcher = "%s"'):format(spec.matcher)
+        end
+        toml[#toml + 1] = ('hooks = [ { type = "command", command = "%s %s" } ]'):format(M.HOOK, spec.event)
+      end
+      if not write(home .. "/config.toml", table.concat(toml, "\n") .. "\n") then
+        return false, "could not write " .. home .. "/config.toml"
+      end
+      self.home = home
+      return true
+    end,
+    env = function(self)
+      return self.home and { GROK_HOME = self.home } or {}
+    end,
+    argv = function(self, run)
+      local argv = { self.bin }
+      if run.resume then
+        vim.list_extend(argv, { "--resume", run.resume })
+      elseif run.session_id then
+        vim.list_extend(argv, { "--session-id", run.session_id })
+      end
+      argv[#argv + 1] = "--no-alt-screen"
+      if run.prompt then
+        argv[#argv + 1] = run.prompt
+      end
+      return argv
+    end,
+  },
 }
 
 local by_name = {}
 for _, cli in ipairs(CLIS) do
-	by_name[cli.name] = cli
+  by_name[cli.name] = cli
 end
 
 --- The CLIs actually on this machine. One you do not have is simply not
 --- offered, which is the same rule find.lua uses for ripgrep.
 function M.available()
-	local out = {}
-	for _, cli in ipairs(CLIS) do
-		if vim.fn.executable(cli.bin) == 1 then
-			out[#out + 1] = cli
-		end
-	end
-	return out
+  local out = {}
+  for _, cli in ipairs(CLIS) do
+    if vim.fn.executable(cli.bin) == 1 then
+      out[#out + 1] = cli
+    end
+  end
+  return out
 end
 
 function M.get(name)
-	return by_name[name]
+  return by_name[name]
 end
 
 --- Put the hook script and each CLI's wiring in place. Returns the CLIs that
@@ -431,23 +431,23 @@ end
 --- whose hooks could not be installed still runs, it just cannot say more than
 --- whether it is alive.
 function M.setup()
-	local ok, err = install_script()
-	if not ok then
-		return {}, { err }
-	end
-	local wired, problems = {}, {}
-	for _, cli in ipairs(M.available()) do
-		local fine, why = true, nil
-		if cli.prepare then
-			fine, why = cli:prepare()
-		end
-		if fine then
-			wired[#wired + 1] = cli
-		else
-			problems[#problems + 1] = cli.name .. ": " .. tostring(why)
-		end
-	end
-	return wired, problems
+  local ok, err = install_script()
+  if not ok then
+    return {}, { err }
+  end
+  local wired, problems = {}, {}
+  for _, cli in ipairs(M.available()) do
+    local fine, why = true, nil
+    if cli.prepare then
+      fine, why = cli:prepare()
+    end
+    if fine then
+      wired[#wired + 1] = cli
+    else
+      problems[#problems + 1] = cli.name .. ": " .. tostring(why)
+    end
+  end
+  return wired, problems
 end
 
 return M

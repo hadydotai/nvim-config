@@ -36,149 +36,149 @@ local LIMIT = 1000
 local running = nil
 
 local function set_hl()
-	vim.api.nvim_set_hl(0, "GrepWhere", { link = "Comment", default = true })
-	vim.api.nvim_set_hl(0, "GrepFile", { link = "Normal", default = true })
-	vim.api.nvim_set_hl(0, "GrepLine", { link = "Normal", default = true })
+  vim.api.nvim_set_hl(0, "GrepWhere", { link = "Comment", default = true })
+  vim.api.nvim_set_hl(0, "GrepFile", { link = "Normal", default = true })
+  vim.api.nvim_set_hl(0, "GrepLine", { link = "Normal", default = true })
 end
 
 --- file:line, with the directory dimmed so the file name reads first, then the
 --- matching line with its indentation trimmed off.
 local function columns(hit)
-	-- the placeholder row has no place, and an empty column is dropped
-	local where = hit.file == "" and "" or hit.file .. ":" .. hit.lnum
-	local col = { text = where, hl = "GrepFile" }
-	local slash = hit.file:match("^.*()/")
-	if slash then
-		col.spans = { { 0, slash, "GrepWhere" } }
-	end
-	return { col, { text = hit.text, hl = "GrepLine" } }
+  -- the placeholder row has no place, and an empty column is dropped
+  local where = hit.file == "" and "" or hit.file .. ":" .. hit.lnum
+  local col = { text = where, hl = "GrepFile" }
+  local slash = hit.file:match("^.*()/")
+  if slash then
+    col.spans = { { 0, slash, "GrepWhere" } }
+  end
+  return { col, { text = hit.text, hl = "GrepLine" } }
 end
 
 local function parse(out)
-	local hits, seen = {}, {}
-	for line in out:gmatch("[^\n]+") do
-		-- --vimgrep is file:line:col:text, and a path can contain a colon, so
-		-- the file is the shortest prefix that leaves three fields behind it
-		local file, lnum, col, text = line:match("^(.-):(%d+):(%d+):(.*)$")
-		if file then
-			-- One row per line, not per match. --vimgrep reports every match, so
-			-- a line matching three times arrives three times, and since a row
-			-- here is the line and where it is, those would be three rows that
-			-- look identical. The column of the first match is kept, which is
-			-- where the cursor lands.
-			local where = file .. ":" .. lnum
-			if not seen[where] then
-				seen[where] = true
-				hits[#hits + 1] = {
-					file = file,
-					lnum = tonumber(lnum),
-					col = tonumber(col),
-					text = vim.trim(text),
-				}
-				if #hits >= LIMIT then
-					break
-				end
-			end
-		end
-	end
-	return hits
+  local hits, seen = {}, {}
+  for line in out:gmatch("[^\n]+") do
+    -- --vimgrep is file:line:col:text, and a path can contain a colon, so
+    -- the file is the shortest prefix that leaves three fields behind it
+    local file, lnum, col, text = line:match("^(.-):(%d+):(%d+):(.*)$")
+    if file then
+      -- One row per line, not per match. --vimgrep reports every match, so
+      -- a line matching three times arrives three times, and since a row
+      -- here is the line and where it is, those would be three rows that
+      -- look identical. The column of the first match is kept, which is
+      -- where the cursor lands.
+      local where = file .. ":" .. lnum
+      if not seen[where] then
+        seen[where] = true
+        hits[#hits + 1] = {
+          file = file,
+          lnum = tonumber(lnum),
+          col = tonumber(col),
+          text = vim.trim(text),
+        }
+        if #hits >= LIMIT then
+          break
+        end
+      end
+    end
+  end
+  return hits
 end
 
 --- Ask ripgrep, and hand the answer back on the main loop.
 local function search(text, done)
-	-- The reply this supersedes is not just ignored, it is stopped: typing a
-	-- word is one search per keystroke, and a search of a large tree that
-	-- nobody is waiting for any more is still reading the disk.
-	if running then
-		pcall(function()
-			running:kill("sigterm")
-		end)
-		running = nil
-	end
-	if text:match("^%s*$") then
-		return done({})
-	end
+  -- The reply this supersedes is not just ignored, it is stopped: typing a
+  -- word is one search per keystroke, and a search of a large tree that
+  -- nobody is waiting for any more is still reading the disk.
+  if running then
+    pcall(function()
+      running:kill("sigterm")
+    end)
+    running = nil
+  end
+  if text:match("^%s*$") then
+    return done({})
+  end
 
-	-- Run from the top, so the paths that come back are relative to it, as
-	-- <leader>f shows them, and are opened by joining them back onto it.
-	running = vim.system({
-		"rg",
-		"--vimgrep", -- file:line:col:text, one match per line
-		"--smart-case",
-		"--color=never",
-		"--", -- a pattern starting with - is a pattern, not a flag
-		text,
-	}, { text = true, cwd = find.base() }, function(out)
-		running = nil
-		-- 0 matched, 1 matched nothing, 2 and up is ripgrep complaining, which
-		-- while typing usually means the regular expression is half written
-		local hits = out.code > 1 and {} or parse(out.stdout or "")
-		local note = #hits >= LIMIT and ("- stopped at " .. LIMIT .. ", keep typing") or nil
-		vim.schedule(function()
-			done(hits, note)
-		end)
-	end)
+  -- Run from the top, so the paths that come back are relative to it, as
+  -- <leader>f shows them, and are opened by joining them back onto it.
+  running = vim.system({
+    "rg",
+    "--vimgrep", -- file:line:col:text, one match per line
+    "--smart-case",
+    "--color=never",
+    "--", -- a pattern starting with - is a pattern, not a flag
+    text,
+  }, { text = true, cwd = find.base() }, function(out)
+    running = nil
+    -- 0 matched, 1 matched nothing, 2 and up is ripgrep complaining, which
+    -- while typing usually means the regular expression is half written
+    local hits = out.code > 1 and {} or parse(out.stdout or "")
+    local note = #hits >= LIMIT and ("- stopped at " .. LIMIT .. ", keep typing") or nil
+    vim.schedule(function()
+      done(hits, note)
+    end)
+  end)
 end
 
 local function to_quickfix(hits)
-	if #hits == 0 then
-		return
-	end
-	vim.fn.setqflist({}, " ", {
-		title = "Grep",
-		items = vim.tbl_map(function(hit)
-			return { filename = vim.fs.joinpath(find.base(), hit.file), lnum = hit.lnum, col = hit.col, text = hit.text }
-		end, hits),
-	})
-	vim.cmd("copen")
+  if #hits == 0 then
+    return
+  end
+  vim.fn.setqflist({}, " ", {
+    title = "Grep",
+    items = vim.tbl_map(function(hit)
+      return { filename = vim.fs.joinpath(find.base(), hit.file), lnum = hit.lnum, col = hit.col, text = hit.text }
+    end, hits),
+  })
+  vim.cmd("copen")
 end
 
 local FOOTER = win_pick.FOOTER:gsub("%s+$", "") .. "   <C-q> quickfix "
 
 function M.show()
-	if vim.fn.executable("rg") == 0 then
-		vim.notify("grep: ripgrep is not installed, run :Deps install", vim.log.levels.WARN)
-		return
-	end
+  if vim.fn.executable("rg") == 0 then
+    vim.notify("grep: ripgrep is not installed, run :Deps install", vim.log.levels.WARN)
+    return
+  end
 
-	-- The dialog needs something to open with, and the empty pattern has no
-	-- answer, so it opens on the last thing it was asked. A first run has
-	-- nothing, and the picker will not open on an empty list, so it starts on
-	-- the word under the cursor, which is the search you were about to type.
-	local seed = vim.fn.expand("<cword>")
-	search(seed, function(hits, note)
-		if #hits == 0 then
-			hits = { { file = "", lnum = 0, col = 0, text = "type to search" } }
-		end
-		picker.open({
-			title = "Grep in " .. find.where(),
-			items = hits,
-			note = note,
-			columns = columns,
-			max = { 60, 200 },
-			flex = 2,
-			footer = FOOTER,
-			query = search,
-			open = function(win, hit)
-				if hit.file == "" then
-					return
-				end
-				win_pick.focus(win)
-				vim.cmd("edit " .. vim.fn.fnameescape(vim.fs.joinpath(find.base(), hit.file)))
-				pcall(vim.api.nvim_win_set_cursor, 0, { hit.lnum, math.max(0, hit.col - 1) })
-				vim.cmd("normal! zz")
-			end,
-			commands = { ["<C-q>"] = to_quickfix },
-		})
-	end)
+  -- The dialog needs something to open with, and the empty pattern has no
+  -- answer, so it opens on the last thing it was asked. A first run has
+  -- nothing, and the picker will not open on an empty list, so it starts on
+  -- the word under the cursor, which is the search you were about to type.
+  local seed = vim.fn.expand("<cword>")
+  search(seed, function(hits, note)
+    if #hits == 0 then
+      hits = { { file = "", lnum = 0, col = 0, text = "type to search" } }
+    end
+    picker.open({
+      title = "Grep in " .. find.where(),
+      items = hits,
+      note = note,
+      columns = columns,
+      max = { 60, 200 },
+      flex = 2,
+      footer = FOOTER,
+      query = search,
+      open = function(win, hit)
+        if hit.file == "" then
+          return
+        end
+        win_pick.focus(win)
+        vim.cmd("edit " .. vim.fn.fnameescape(vim.fs.joinpath(find.base(), hit.file)))
+        pcall(vim.api.nvim_win_set_cursor, 0, { hit.lnum, math.max(0, hit.col - 1) })
+        vim.cmd("normal! zz")
+      end,
+      commands = { ["<C-q>"] = to_quickfix },
+    })
+  end)
 end
 
 set_hl()
 vim.api.nvim_create_autocmd("ColorScheme", { callback = set_hl })
 
 vim.keymap.set("n", "<leader>g", M.show, {
-	silent = true,
-	desc = "Grep the project: <CR> chooses a window, <C-q> to the quickfix list",
+  silent = true,
+  desc = "Grep the project: <CR> chooses a window, <C-q> to the quickfix list",
 })
 
 return M

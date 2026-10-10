@@ -36,20 +36,20 @@ vim.o.shadafile = state .. "/shada/main.shada"
 -- Tools we install ourselves rather than through a package manager live here
 -- too, so they travel with the config and need no sudo (see lua/deps.lua).
 vim.env.PATH = table.concat({
-	data .. "/bin", -- single binaries: tree-sitter, lua-language-server
-	data .. "/venv/bin", -- python virtualenv: pylsp
-	data .. "/node/node_modules/.bin", -- npm prefix: tsgo
-	vim.env.PATH,
+  data .. "/bin", -- single binaries: tree-sitter, lua-language-server
+  data .. "/venv/bin", -- python virtualenv: pylsp
+  data .. "/node/node_modules/.bin", -- npm prefix: tsgo
+  vim.env.PATH,
 }, ":")
 
 for _, dir in ipairs({
-	site,
-	data .. "/bin",
-	state .. "/undo",
-	state .. "/swap",
-	state .. "/backup",
-	state .. "/view",
-	state .. "/shada",
+  site,
+  data .. "/bin",
+  state .. "/undo",
+  state .. "/swap",
+  state .. "/backup",
+  state .. "/view",
+  state .. "/shada",
 }) do
-	vim.fn.mkdir(dir, "p")
+  vim.fn.mkdir(dir, "p")
 end

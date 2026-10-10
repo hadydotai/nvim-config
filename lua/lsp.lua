@@ -19,12 +19,12 @@ M.start_dir = vim.fs.normalize(vim.fn.getcwd())
 vim.lsp.enable(M.servers)
 
 vim.api.nvim_create_autocmd("LspAttach", {
-	callback = function(ev)
-		local client = vim.lsp.get_client_by_id(ev.data.client_id)
-		if client ~= nil and client:supports_method("textDocument/completion") then
-			vim.lsp.completion.enable(true, client.id, ev.buf, { autotrigger = true })
-		end
-	end,
+  callback = function(ev)
+    local client = vim.lsp.get_client_by_id(ev.data.client_id)
+    if client ~= nil and client:supports_method("textDocument/completion") then
+      vim.lsp.completion.enable(true, client.id, ev.buf, { autotrigger = true })
+    end
+  end,
 })
 
 -- Written out rather than appended to the default "menu,popup", because the
@@ -50,7 +50,7 @@ vim.o.completeopt = "menu,menuone,popup,noinsert"
 -- Mapped the way Neovim maps the rest of them, unconditionally, so it behaves
 -- the same whether or not a server has attached yet: with none, it says so.
 vim.keymap.set("n", "gd", function()
-	vim.lsp.buf.definition()
+  vim.lsp.buf.definition()
 end, { silent = true, desc = "Go to definition" })
 
 -- Neovim's own LSP mappings, listed so <leader>h describes the whole set rather
@@ -59,16 +59,16 @@ end, { silent = true, desc = "Go to definition" })
 -- keys.setup() could have watched for them, and K is attached per buffer when a
 -- server that answers hover connects.
 require("keys").declare({
-	{ lhs = "K", desc = "Documentation for the symbol under the cursor; K again to scroll it, q closes" },
-	{ lhs = "grn", desc = "Rename the symbol under the cursor (Neovim default)" },
-	{ lhs = "gra", mode = { "n", "x" }, desc = "Code actions (Neovim default)" },
-	{ lhs = "grr", desc = "References, in the quickfix list (Neovim default)" },
-	{ lhs = "gri", desc = "Go to implementation (Neovim default)" },
-	{ lhs = "grt", desc = "Go to type definition (Neovim default)" },
-	{ lhs = "grx", desc = "Run the code lens under the cursor (Neovim default)" },
-	{ lhs = "gO", desc = "Symbols in the quickfix list; <leader>s is the same list as a dialog" },
-	{ lhs = "<C-s>", mode = { "i", "s" }, desc = "Signature help (Neovim default)" },
-	{ lhs = "<C-]>", desc = "Go to definition through 'tagfunc' (Neovim default)" },
+  { lhs = "K", desc = "Documentation for the symbol under the cursor; K again to scroll it, q closes" },
+  { lhs = "grn", desc = "Rename the symbol under the cursor (Neovim default)" },
+  { lhs = "gra", mode = { "n", "x" }, desc = "Code actions (Neovim default)" },
+  { lhs = "grr", desc = "References, in the quickfix list (Neovim default)" },
+  { lhs = "gri", desc = "Go to implementation (Neovim default)" },
+  { lhs = "grt", desc = "Go to type definition (Neovim default)" },
+  { lhs = "grx", desc = "Run the code lens under the cursor (Neovim default)" },
+  { lhs = "gO", desc = "Symbols in the quickfix list; <leader>s is the same list as a dialog" },
+  { lhs = "<C-s>", mode = { "i", "s" }, desc = "Signature help (Neovim default)" },
+  { lhs = "<C-]>", desc = "Go to definition through 'tagfunc' (Neovim default)" },
 })
 
 return M

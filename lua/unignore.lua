@@ -39,32 +39,32 @@ local FILE = vim.fn.stdpath("state") .. "/unignore.json"
 local roots = {}
 
 function M.root()
-	local cwd = vim.fn.getcwd()
-	local known = roots[cwd]
-	if known ~= nil then
-		return known or nil -- false is "asked, and it is not a repository"
-	end
+  local cwd = vim.fn.getcwd()
+  local known = roots[cwd]
+  if known ~= nil then
+    return known or nil -- false is "asked, and it is not a repository"
+  end
 
-	local root = nil
-	if vim.fn.executable("git") == 1 then
-		local out = vim.fn.systemlist({ "git", "rev-parse", "--show-toplevel" })
-		if vim.v.shell_error == 0 and out[1] and out[1] ~= "" then
-			root = out[1]
-		end
-	end
-	roots[cwd] = root or false
-	return root
+  local root = nil
+  if vim.fn.executable("git") == 1 then
+    local out = vim.fn.systemlist({ "git", "rev-parse", "--show-toplevel" })
+    if vim.v.shell_error == 0 and out[1] and out[1] ~= "" then
+      root = out[1]
+    end
+  end
+  roots[cwd] = root or false
+  return root
 end
 
 local function split(text)
-	local out = {}
-	for pat in text:gmatch("[^,]+") do
-		pat = vim.trim(pat)
-		if pat ~= "" then
-			out[#out + 1] = pat
-		end
-	end
-	return out
+  local out = {}
+  for pat in text:gmatch("[^,]+") do
+    pat = vim.trim(pat)
+    if pat ~= "" then
+      out[#out + 1] = pat
+    end
+  end
+  return out
 end
 
 --------------------------------------------------------------------------- --
@@ -74,49 +74,49 @@ end
 local store = nil -- the whole file, read once
 
 local function load()
-	if store then
-		return store
-	end
-	store = {}
-	local f = io.open(FILE, "r")
-	if f then
-		local text = f:read("*a")
-		f:close()
-		-- A file we cannot parse is treated as empty rather than as an error to
-		-- report on every keystroke: the worst case is that ignored files stay
-		-- hidden, which is what they would be without any of this.
-		local ok, decoded = pcall(vim.json.decode, text)
-		if ok and type(decoded) == "table" then
-			store = decoded
-		end
-	end
-	return store
+  if store then
+    return store
+  end
+  store = {}
+  local f = io.open(FILE, "r")
+  if f then
+    local text = f:read("*a")
+    f:close()
+    -- A file we cannot parse is treated as empty rather than as an error to
+    -- report on every keystroke: the worst case is that ignored files stay
+    -- hidden, which is what they would be without any of this.
+    local ok, decoded = pcall(vim.json.decode, text)
+    if ok and type(decoded) == "table" then
+      store = decoded
+    end
+  end
+  return store
 end
 
 --- The saved pattern text for this repository, "" when there is none.
 function M.text()
-	local root = M.root()
-	return root and load()[root] or ""
+  local root = M.root()
+  return root and load()[root] or ""
 end
 
 function M.save(text)
-	local root = M.root()
-	if not root then
-		return
-	end
-	local all = load()
-	-- normalised on the way in: trimmed, empties dropped, so the text that comes
-	-- back out is the text the prompt should show next time
-	local patterns = table.concat(split(text), ",")
-	all[root] = patterns ~= "" and patterns or nil
+  local root = M.root()
+  if not root then
+    return
+  end
+  local all = load()
+  -- normalised on the way in: trimmed, empties dropped, so the text that comes
+  -- back out is the text the prompt should show next time
+  local patterns = table.concat(split(text), ",")
+  all[root] = patterns ~= "" and patterns or nil
 
-	local f = io.open(FILE, "w")
-	if not f then
-		vim.notify("unignore: cannot write " .. FILE, vim.log.levels.ERROR)
-		return
-	end
-	f:write(vim.json.encode(all))
-	f:close()
+  local f = io.open(FILE, "w")
+  if not f then
+    vim.notify("unignore: cannot write " .. FILE, vim.log.levels.ERROR)
+    return
+  end
+  f:write(vim.json.encode(all))
+  f:close()
 end
 
 --------------------------------------------------------------------------- --
@@ -127,39 +127,39 @@ end
 --- to be added to the listing find.lua already has. Empty and free when there are no patterns,
 --- which is the usual case and matters because :find asks on every keystroke.
 function M.files()
-	local patterns = split(M.text())
-	if #patterns == 0 then
-		return {}
-	end
-	local root = M.root()
+  local patterns = split(M.text())
+  if #patterns == 0 then
+    return {}
+  end
+  local root = M.root()
 
-	local cmd = {
-		"git",
-		-- from the top, as find.lua lists, so the paths line up with its own and
-		-- the patterns mean the same thing from whichever subdirectory you are in
-		"-C",
-		root,
-		"-c",
-		"core.quotePath=false", -- as in find.lua: octal-escaped paths cannot be opened
-		"ls-files",
-		"--others", -- untracked, since a tracked file was never ignored
-		"--ignored", -- and only the ignored ones, so this cannot repeat the main list
-		"--exclude-standard",
-		"--", -- everything after this is a path, never an option
-	}
-	vim.list_extend(cmd, patterns)
+  local cmd = {
+    "git",
+    -- from the top, as find.lua lists, so the paths line up with its own and
+    -- the patterns mean the same thing from whichever subdirectory you are in
+    "-C",
+    root,
+    "-c",
+    "core.quotePath=false", -- as in find.lua: octal-escaped paths cannot be opened
+    "ls-files",
+    "--others", -- untracked, since a tracked file was never ignored
+    "--ignored", -- and only the ignored ones, so this cannot repeat the main list
+    "--exclude-standard",
+    "--", -- everything after this is a path, never an option
+  }
+  vim.list_extend(cmd, patterns)
 
-	local out = vim.fn.systemlist(cmd)
-	if vim.v.shell_error ~= 0 then
-		vim.notify("unignore: git rejected the patterns", vim.log.levels.WARN)
-		return {}
-	end
-	-- git lists an ignored directory it will not descend into as one entry with
-	-- a trailing slash, and a name it knows about may have gone from the disk.
-	-- Neither can be opened, so neither belongs in a list of files to open.
-	return vim.tbl_filter(function(f)
-		return f ~= "" and vim.fn.filereadable(vim.fs.joinpath(root, f)) == 1
-	end, out)
+  local out = vim.fn.systemlist(cmd)
+  if vim.v.shell_error ~= 0 then
+    vim.notify("unignore: git rejected the patterns", vim.log.levels.WARN)
+    return {}
+  end
+  -- git lists an ignored directory it will not descend into as one entry with
+  -- a trailing slash, and a name it knows about may have gone from the disk.
+  -- Neither can be opened, so neither belongs in a list of files to open.
+  return vim.tbl_filter(function(f)
+    return f ~= "" and vim.fn.filereadable(vim.fs.joinpath(root, f)) == 1
+  end, out)
 end
 
 --------------------------------------------------------------------------- --
@@ -169,22 +169,22 @@ end
 --- Prompt for this repository's patterns, prefilled with what is saved, and
 --- call `done` once something has been written.
 function M.edit(done)
-	if not M.root() then
-		vim.notify("unignore: not in a git repository", vim.log.levels.WARN)
-		return
-	end
-	vim.ui.input({
-		prompt = "unignore (comma separated git pathspecs): ",
-		default = M.text(),
-	}, function(text)
-		if text == nil then
-			return -- cancelled, so leave whatever was there alone
-		end
-		M.save(text)
-		if done then
-			done()
-		end
-	end)
+  if not M.root() then
+    vim.notify("unignore: not in a git repository", vim.log.levels.WARN)
+    return
+  end
+  vim.ui.input({
+    prompt = "unignore (comma separated git pathspecs): ",
+    default = M.text(),
+  }, function(text)
+    if text == nil then
+      return -- cancelled, so leave whatever was there alone
+    end
+    M.save(text)
+    if done then
+      done()
+    end
+  end)
 end
 
 return M

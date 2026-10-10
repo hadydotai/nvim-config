@@ -32,53 +32,53 @@ local KEEP = 40
 local records = nil
 
 local function read()
-	local f = io.open(PATH, "r")
-	if not f then
-		return {}
-	end
-	local text = f:read("*a")
-	f:close()
-	local ok, value = pcall(vim.json.decode, text)
-	return ok and vim.islist(value) and value or {}
+  local f = io.open(PATH, "r")
+  if not f then
+    return {}
+  end
+  local text = f:read("*a")
+  f:close()
+  local ok, value = pcall(vim.json.decode, text)
+  return ok and vim.islist(value) and value or {}
 end
 
 local function write()
-	vim.fn.mkdir(vim.fn.fnamemodify(PATH, ":h"), "p")
-	local f = io.open(PATH, "w")
-	if not f then
-		return false
-	end
-	f:write(vim.json.encode(records))
-	f:close()
-	return true
+  vim.fn.mkdir(vim.fn.fnamemodify(PATH, ":h"), "p")
+  local f = io.open(PATH, "w")
+  if not f then
+    return false
+  end
+  f:write(vim.json.encode(records))
+  f:close()
+  return true
 end
 
 --- Newest first, which is both the order the dashboard wants and the order
 --- pruning has to work in.
 local function sort()
-	table.sort(records, function(a, b)
-		return (a.at or 0) > (b.at or 0)
-	end)
+  table.sort(records, function(a, b)
+    return (a.at or 0) > (b.at or 0)
+  end)
 end
 
 local function load()
-	if records then
-		return records
-	end
-	records = {}
-	for _, one in ipairs(read()) do
-		-- A record whose directory is gone is a resume that cannot happen: the
-		-- worktree was removed, or the project moved. Dropping it here is what
-		-- keeps the file from growing without end.
-		if type(one) == "table" and one.cwd and vim.fn.isdirectory(one.cwd) == 1 then
-			records[#records + 1] = one
-		end
-	end
-	sort()
-	while #records > KEEP do
-		table.remove(records)
-	end
-	return records
+  if records then
+    return records
+  end
+  records = {}
+  for _, one in ipairs(read()) do
+    -- A record whose directory is gone is a resume that cannot happen: the
+    -- worktree was removed, or the project moved. Dropping it here is what
+    -- keeps the file from growing without end.
+    if type(one) == "table" and one.cwd and vim.fn.isdirectory(one.cwd) == 1 then
+      records[#records + 1] = one
+    end
+  end
+  sort()
+  while #records > KEEP do
+    table.remove(records)
+  end
+  return records
 end
 
 --- Remember a run, replacing what was remembered under the same id.
@@ -87,70 +87,70 @@ end
 --- end, because the end may be Neovim being killed, and a run nobody wrote
 --- down is a conversation you cannot get back to.
 function M.record(run)
-	load()
-	if not run.id or not run.cwd then
-		return
-	end
-	local one = {
-		id = run.id,
-		cli = run.cli,
-		name = run.name,
-		cwd = run.cwd,
-		where = run.where,
-		base = run.base,
-		session = run.session_id or run.session,
-		prompt = run.prompt,
-		at = os.time(),
-		status = run.status,
-	}
-	for i, other in ipairs(records) do
-		if other.id == one.id then
-			records[i] = one
-			sort()
-			return write()
-		end
-	end
-	table.insert(records, 1, one)
-	sort()
-	while #records > KEEP do
-		table.remove(records)
-	end
-	return write()
+  load()
+  if not run.id or not run.cwd then
+    return
+  end
+  local one = {
+    id = run.id,
+    cli = run.cli,
+    name = run.name,
+    cwd = run.cwd,
+    where = run.where,
+    base = run.base,
+    session = run.session_id or run.session,
+    prompt = run.prompt,
+    at = os.time(),
+    status = run.status,
+  }
+  for i, other in ipairs(records) do
+    if other.id == one.id then
+      records[i] = one
+      sort()
+      return write()
+    end
+  end
+  table.insert(records, 1, one)
+  sort()
+  while #records > KEEP do
+    table.remove(records)
+  end
+  return write()
 end
 
 function M.forget(id)
-	load()
-	for i, one in ipairs(records) do
-		if one.id == id then
-			table.remove(records, i)
-			return write()
-		end
-	end
-	return false
+  load()
+  for i, one in ipairs(records) do
+    if one.id == id then
+      table.remove(records, i)
+      return write()
+    end
+  end
+  return false
 end
 
 --- Everything remembered about a directory, gone with it. Called when a
 --- worktree is removed, since the conversation is about work that no longer
 --- exists anywhere.
 function M.forget_dir(dir)
-	load()
-	local kept, dropped = {}, 0
-	for _, one in ipairs(records) do
-		if one.cwd == dir then
-			dropped = dropped + 1
-		else
-			kept[#kept + 1] = one
-		end
-	end
-	records = kept
-	if dropped > 0 then
-		write()
-	end
-	return dropped
+  load()
+  local kept, dropped = {}, 0
+  for _, one in ipairs(records) do
+    if one.cwd == dir then
+      dropped = dropped + 1
+    else
+      kept[#kept + 1] = one
+    end
+  end
+  records = kept
+  if dropped > 0 then
+    write()
+  end
+  return dropped
 end
 
 function M.all()
-	return load()
+  return load()
 end
 
 --- The newest record for each directory, newest first. That is what a row on
@@ -162,15 +162,15 @@ end
 --- question about the list of worktrees, which the dashboard has and this file
 --- does not.
 function M.newest()
-	load()
-	local seen, out = {}, {}
-	for _, one in ipairs(records) do
-		if not seen[one.cwd] then
-			seen[one.cwd] = true
-			out[#out + 1] = one
-		end
-	end
-	return out
+  load()
+  local seen, out = {}, {}
+  for _, one in ipairs(records) do
+    if not seen[one.cwd] then
+      seen[one.cwd] = true
+      out[#out + 1] = one
+    end
+  end
+  return out
 end
 
 return M

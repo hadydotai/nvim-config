@@ -86,11 +86,11 @@ return {
   ---@type lspconfig.settings.lua_ls
   settings = {
     Lua = {
-			runtime = { version = "LuaJIT" },
-			workspace = {
-				checkThirdParty = false,
-				library = { vim.env.VIMRUNTIME },
-			},
+      runtime = { version = "LuaJIT" },
+      workspace = {
+        checkThirdParty = false,
+        library = { vim.env.VIMRUNTIME },
+      },
       codeLens = { enable = true },
       hint = { enable = true, semicolon = 'Disable' },
     },

@@ -3,6 +3,10 @@
 
 vim.o.number = true
 vim.o.relativenumber = true
+-- Indent with spaces, never tabs. Go and make still get tabs from their own
+-- ftplugins: gofmt rewrites indentation to tabs on write regardless, and a
+-- Makefile recipe indented with spaces does not run.
+vim.o.expandtab = true
 vim.o.tabstop = 2
 vim.o.softtabstop = 2
 vim.o.shiftwidth = 2

@@ -42,9 +42,9 @@ local problems = {}
 --------------------------------------------------------------------------- --
 
 local function changed()
-	for _, fn in ipairs(watchers) do
-		pcall(fn)
-	end
+  for _, fn in ipairs(watchers) do
+    pcall(fn)
+  end
 end
 
 --- Tell every view to repaint. Public because a run is not the only thing they
@@ -55,53 +55,53 @@ M.changed = changed
 
 --- Subscribe to any change in any run. Returns a function that unsubscribes.
 function M.watch(fn)
-	watchers[#watchers + 1] = fn
-	return function()
-		for i, other in ipairs(watchers) do
-			if other == fn then
-				table.remove(watchers, i)
-				return
-			end
-		end
-	end
+  watchers[#watchers + 1] = fn
+  return function()
+    for i, other in ipairs(watchers) do
+      if other == fn then
+        table.remove(watchers, i)
+        return
+      end
+    end
+  end
 end
 
 --- Every run, newest first.
 function M.runs()
-	local out = {}
-	for _, run in pairs(runs) do
-		out[#out + 1] = run
-	end
-	table.sort(out, function(a, b)
-		return a.order > b.order
-	end)
-	return out
+  local out = {}
+  for _, run in pairs(runs) do
+    out[#out + 1] = run
+  end
+  table.sort(out, function(a, b)
+    return a.order > b.order
+  end)
+  return out
 end
 
 function M.get(id)
-	return runs[id]
+  return runs[id]
 end
 
 function M.problems()
-	return problems
+  return problems
 end
 
 local function status(run, new, doing)
-	-- Once a run has exited nothing can revive it: a Stop hook arriving after
-	-- the process is gone is just a slow write, not news.
-	if run.status == "exited" then
-		return
-	end
-	local was, doing_was = run.status, run.doing
-	run.status = new
-	run.since = (was ~= new) and os.time() or run.since
-	run.updated = os.time()
-	if doing then
-		run.doing = doing
-	end
-	if was ~= new or doing_was ~= run.doing then
-		changed()
-	end
+  -- Once a run has exited nothing can revive it: a Stop hook arriving after
+  -- the process is gone is just a slow write, not news.
+  if run.status == "exited" then
+    return
+  end
+  local was, doing_was = run.status, run.doing
+  run.status = new
+  run.since = (was ~= new) and os.time() or run.since
+  run.updated = os.time()
+  if doing then
+    run.doing = doing
+  end
+  if was ~= new or doing_was ~= run.doing then
+    changed()
+  end
 end
 
 --------------------------------------------------------------------------- --
@@ -116,77 +116,77 @@ end
 --- which case this event is the nested agent's and saying so would end our
 --- agent's turn on its behalf.
 local function route(event)
-	if event.run ~= "" and runs[event.run] then
-		return runs[event.run]
-	end
-	local chain = {}
-	for pid, comm in (event.pids or ""):gmatch("(%d+):(%S*)") do
-		chain[#chain + 1] = { pid = tonumber(pid), comm = comm }
-	end
-	local nested = 0
-	for _, step in ipairs(chain) do
-		for _, run in pairs(runs) do
-			if run.pid == step.pid then
-				return nested > 0 and nil or run
-			end
-		end
-		if AGENT_COMMS[step.comm] then
-			nested = nested + 1
-		end
-	end
-	return nil
+  if event.run ~= "" and runs[event.run] then
+    return runs[event.run]
+  end
+  local chain = {}
+  for pid, comm in (event.pids or ""):gmatch("(%d+):(%S*)") do
+    chain[#chain + 1] = { pid = tonumber(pid), comm = comm }
+  end
+  local nested = 0
+  for _, step in ipairs(chain) do
+    for _, run in pairs(runs) do
+      if run.pid == step.pid then
+        return nested > 0 and nil or run
+      end
+    end
+    if AGENT_COMMS[step.comm] then
+      nested = nested + 1
+    end
+  end
+  return nil
 end
 
 local function apply(event)
-	local run = route(event)
-	if not run then
-		return
-	end
-	-- Codex names its own conversations, so this is the one chance to hear the
-	-- id from the agent itself rather than looking it up later.
-	if event.session ~= "" and run.session ~= event.session then
-		run.session = event.session
-		require("agent_store").record(run)
-	end
-	local name = event.event
-	if name == "UserPromptSubmit" then
-		status(run, "working", "thinking")
-	elseif name == "PostToolUse" then
-		status(run, "working", event.tool ~= "" and event.tool or "working")
-	elseif name == "Notification" or name == "PermissionRequest" then
-		status(run, "waiting", "needs you")
-	elseif name == "Stop" then
-		-- Said explicitly rather than left alone: whatever it was last doing
-		-- is over, and a stale "needs you" from a permission prompt it has
-		-- since been through reads as though it is still asking.
-		status(run, "idle", "your turn")
-	end
+  local run = route(event)
+  if not run then
+    return
+  end
+  -- Codex names its own conversations, so this is the one chance to hear the
+  -- id from the agent itself rather than looking it up later.
+  if event.session ~= "" and run.session ~= event.session then
+    run.session = event.session
+    require("agent_store").record(run)
+  end
+  local name = event.event
+  if name == "UserPromptSubmit" then
+    status(run, "working", "thinking")
+  elseif name == "PostToolUse" then
+    status(run, "working", event.tool ~= "" and event.tool or "working")
+  elseif name == "Notification" or name == "PermissionRequest" then
+    status(run, "waiting", "needs you")
+  elseif name == "Stop" then
+    -- Said explicitly rather than left alone: whatever it was last doing
+    -- is over, and a stale "needs you" from a permission prompt it has
+    -- since been through reads as though it is still asking.
+    status(run, "idle", "your turn")
+  end
 end
 
 --- Read everything waiting in the inbox and delete it. Files are named by the
 --- second they were written, so sorting the names replays them in order.
 local function drain()
-	local dir = cli.INBOX
-	if vim.fn.isdirectory(dir) == 0 then
-		return
-	end
-	local names = vim.fn.readdir(dir, function(name)
-		return name:match("%.json$") and 1 or 0
-	end)
-	table.sort(names)
-	for _, name in ipairs(names) do
-		local path = dir .. "/" .. name
-		local f = io.open(path, "r")
-		if f then
-			local text = f:read("*a")
-			f:close()
-			local ok, event = pcall(vim.json.decode, text)
-			if ok and type(event) == "table" and event.event then
-				pcall(apply, event)
-			end
-		end
-		vim.fn.delete(path)
-	end
+  local dir = cli.INBOX
+  if vim.fn.isdirectory(dir) == 0 then
+    return
+  end
+  local names = vim.fn.readdir(dir, function(name)
+    return name:match("%.json$") and 1 or 0
+  end)
+  table.sort(names)
+  for _, name in ipairs(names) do
+    local path = dir .. "/" .. name
+    local f = io.open(path, "r")
+    if f then
+      local text = f:read("*a")
+      f:close()
+      local ok, event = pcall(vim.json.decode, text)
+      if ok and type(event) == "table" and event.event then
+        pcall(apply, event)
+      end
+    end
+    vim.fn.delete(path)
+  end
 end
 
 local watcher, ticker
@@ -196,33 +196,33 @@ local watcher, ticker
 --- on macOS not at all for some volumes), and a status that is a second late
 --- is much better than one that never arrives.
 local function listen()
-	if ticker then
-		return
-	end
-	vim.fn.mkdir(cli.INBOX, "p")
-	drain()
+  if ticker then
+    return
+  end
+  vim.fn.mkdir(cli.INBOX, "p")
+  drain()
 
-	watcher = vim.uv.new_fs_event()
-	if watcher then
-		pcall(function()
-			watcher:start(cli.INBOX, {}, function()
-				vim.schedule(drain)
-			end)
-		end)
-	end
+  watcher = vim.uv.new_fs_event()
+  if watcher then
+    pcall(function()
+      watcher:start(cli.INBOX, {}, function()
+        vim.schedule(drain)
+      end)
+    end)
+  end
 
-	ticker = vim.uv.new_timer()
-	ticker:start(1000, 1000, function()
-		vim.schedule(function()
-			drain()
-			-- The views are woken whether or not anything happened here: elapsed
-			-- time is on screen, and they show worktrees as well as runs, which
-			-- change without this file ever hearing about it. Both are guarded
-			-- on being visible, so the cost of a tick nobody is watching is a
-			-- loop over an empty list.
-			changed()
-		end)
-	end)
+  ticker = vim.uv.new_timer()
+  ticker:start(1000, 1000, function()
+    vim.schedule(function()
+      drain()
+      -- The views are woken whether or not anything happened here: elapsed
+      -- time is on screen, and they show worktrees as well as runs, which
+      -- change without this file ever hearing about it. Both are guarded
+      -- on being visible, so the cost of a tick nobody is watching is a
+      -- loop over an empty list.
+      changed()
+    end)
+  end)
 end
 
 --------------------------------------------------------------------------- --
@@ -230,8 +230,8 @@ end
 --------------------------------------------------------------------------- --
 
 local function id()
-	order = order + 1
-	return ("%d%s"):format(order, tostring(os.time()):sub(-4))
+  order = order + 1
+  return ("%d%s"):format(order, tostring(os.time()):sub(-4))
 end
 
 --- Start an agent.
@@ -245,107 +245,107 @@ end
 ---
 --- Returns the run, or nil and a reason.
 function M.spawn(opts)
-	opts = opts or {}
-	local adapter = cli.get(opts.cli)
-	if not adapter then
-		return nil, "unknown agent: " .. tostring(opts.cli)
-	end
-	if vim.fn.executable(adapter.bin) == 0 then
-		return nil, adapter.bin .. " is not installed"
-	end
+  opts = opts or {}
+  local adapter = cli.get(opts.cli)
+  if not adapter then
+    return nil, "unknown agent: " .. tostring(opts.cli)
+  end
+  if vim.fn.executable(adapter.bin) == 0 then
+    return nil, adapter.bin .. " is not installed"
+  end
 
-	local cwd = opts.cwd or vim.fn.getcwd()
-	if vim.fn.isdirectory(cwd) == 0 then
-		return nil, "no such directory: " .. cwd
-	end
+  local cwd = opts.cwd or vim.fn.getcwd()
+  if vim.fn.isdirectory(cwd) == 0 then
+    return nil, "no such directory: " .. cwd
+  end
 
-	local run = {
-		id = id(),
-		cli = adapter.name,
-		label = adapter.label,
-		name = opts.name or vim.fn.fnamemodify(cwd, ":t"),
-		where = opts.label,
-		base = opts.base,
-		cwd = cwd,
-		prompt = opts.prompt,
-		resume = opts.resume,
-		-- Minted here, before the agent starts, for the CLIs that will take
-		-- one: that is what makes this conversation findable again tomorrow.
-		-- A resume keeps the id it is resuming rather than minting a second.
-		session_id = opts.resume or (adapter.mints and cli.uuid() or nil),
-		status = "starting",
-		doing = "starting",
-		since = os.time(),
-		updated = os.time(),
-		order = order,
-	}
+  local run = {
+    id = id(),
+    cli = adapter.name,
+    label = adapter.label,
+    name = opts.name or vim.fn.fnamemodify(cwd, ":t"),
+    where = opts.label,
+    base = opts.base,
+    cwd = cwd,
+    prompt = opts.prompt,
+    resume = opts.resume,
+    -- Minted here, before the agent starts, for the CLIs that will take
+    -- one: that is what makes this conversation findable again tomorrow.
+    -- A resume keeps the id it is resuming rather than minting a second.
+    session_id = opts.resume or (adapter.mints and cli.uuid() or nil),
+    status = "starting",
+    doing = "starting",
+    since = os.time(),
+    updated = os.time(),
+    order = order,
+  }
 
-	local env = vim.tbl_extend("force", {
-		NVIM_AGENT_RUN = run.id,
-		NVIM_AGENT_INBOX = cli.INBOX,
-	}, adapter.env and adapter:env() or {})
+  local env = vim.tbl_extend("force", {
+    NVIM_AGENT_RUN = run.id,
+    NVIM_AGENT_INBOX = cli.INBOX,
+  }, adapter.env and adapter:env() or {})
 
-	-- Listed, so <leader>b finds an agent the same way it finds anything else.
-	-- The dashboard is the view built for them, but a terminal running in this
-	-- editor that does not appear in the list of buffers is a thing you can
-	-- only reach through the one window that knows about it.
-	local buf = vim.api.nvim_create_buf(true, false)
-	vim.bo[buf].bufhidden = "hide"
+  -- Listed, so <leader>b finds an agent the same way it finds anything else.
+  -- The dashboard is the view built for them, but a terminal running in this
+  -- editor that does not appear in the list of buffers is a thing you can
+  -- only reach through the one window that knows about it.
+  local buf = vim.api.nvim_create_buf(true, false)
+  vim.bo[buf].bufhidden = "hide"
 
-	local job
-	local ok, err = pcall(function()
-		vim.api.nvim_buf_call(buf, function()
-			job = vim.fn.jobstart(adapter:argv(run), {
-				term = true,
-				cwd = cwd,
-				env = env,
-				on_exit = function(_, code)
-					-- Dropped: already off every list, and recording it now would
-					-- write back the conversation that was just erased.
-					if run.dropped then
-						if run.on_dropped then
-							vim.schedule(run.on_dropped)
-						end
-						return
-					end
-					run.exit_code = code
-					run.status = "exited"
-					run.doing = code == 0 and "finished" or ("exited " .. code)
-					run.since = os.time()
-					run.updated = os.time()
-					vim.schedule(function()
-						require("agent_store").record(run)
-						changed()
-					end)
-				end,
-			})
-		end)
-	end)
-	if not ok or not job or job <= 0 then
-		pcall(vim.api.nvim_buf_delete, buf, { force = true })
-		return nil, "could not start " .. adapter.bin .. (ok and "" or (": " .. tostring(err)))
-	end
+  local job
+  local ok, err = pcall(function()
+    vim.api.nvim_buf_call(buf, function()
+      job = vim.fn.jobstart(adapter:argv(run), {
+        term = true,
+        cwd = cwd,
+        env = env,
+        on_exit = function(_, code)
+          -- Dropped: already off every list, and recording it now would
+          -- write back the conversation that was just erased.
+          if run.dropped then
+            if run.on_dropped then
+              vim.schedule(run.on_dropped)
+            end
+            return
+          end
+          run.exit_code = code
+          run.status = "exited"
+          run.doing = code == 0 and "finished" or ("exited " .. code)
+          run.since = os.time()
+          run.updated = os.time()
+          vim.schedule(function()
+            require("agent_store").record(run)
+            changed()
+          end)
+        end,
+      })
+    end)
+  end)
+  if not ok or not job or job <= 0 then
+    pcall(vim.api.nvim_buf_delete, buf, { force = true })
+    return nil, "could not start " .. adapter.bin .. (ok and "" or (": " .. tostring(err)))
+  end
 
-	run.buf = buf
-	run.job = job
-	run.chan = job
-	run.pid = (pcall(vim.fn.jobpid, job)) and vim.fn.jobpid(job) or nil
-	-- Named after the run rather than the pid and shell path a terminal buffer
-	-- is called by default, since this is the name <leader>b will show.
-	pcall(vim.api.nvim_buf_set_name, buf, ("agent://%s/%s"):format(adapter.name, run.name))
-	vim.b[buf].agent_run = run.id
+  run.buf = buf
+  run.job = job
+  run.chan = job
+  run.pid = (pcall(vim.fn.jobpid, job)) and vim.fn.jobpid(job) or nil
+  -- Named after the run rather than the pid and shell path a terminal buffer
+  -- is called by default, since this is the name <leader>b will show.
+  pcall(vim.api.nvim_buf_set_name, buf, ("agent://%s/%s"):format(adapter.name, run.name))
+  vim.b[buf].agent_run = run.id
 
-	runs[run.id] = run
-	require("agent_store").record(run)
-	-- An agent handed a question is working on it before any hook can say so.
-	-- One that was not - a resume, or a start with nothing to ask yet - comes
-	-- up at its prompt waiting for you, and "starting" is then a state it never
-	-- leaves, since the first hook of a turn does not fire until you type.
-	local asked = run.prompt and vim.trim(run.prompt) ~= ""
-	status(run, asked and "working" or "idle", asked and "starting" or "ready")
-	listen()
-	changed()
-	return run
+  runs[run.id] = run
+  require("agent_store").record(run)
+  -- An agent handed a question is working on it before any hook can say so.
+  -- One that was not - a resume, or a start with nothing to ask yet - comes
+  -- up at its prompt waiting for you, and "starting" is then a state it never
+  -- leaves, since the first hook of a turn does not fire until you type.
+  local asked = run.prompt and vim.trim(run.prompt) ~= ""
+  status(run, asked and "working" or "idle", asked and "starting" or "ready")
+  listen()
+  changed()
+  return run
 end
 
 --- Type into a running agent. The trailing carriage return is what submits it,
@@ -357,27 +357,27 @@ end
 --- message with a fenced block in it arrives whole, and only the CR below
 --- submits it. Measured against a real one, not assumed.
 function M.send(run, text, submit)
-	if not run or not run.chan or run.status == "exited" then
-		return false
-	end
-	local ok = pcall(vim.api.nvim_chan_send, run.chan, text)
-	if ok and submit ~= false then
-		vim.defer_fn(function()
-			pcall(vim.api.nvim_chan_send, run.chan, "\r")
-		end, 40)
-	end
-	return ok
+  if not run or not run.chan or run.status == "exited" then
+    return false
+  end
+  local ok = pcall(vim.api.nvim_chan_send, run.chan, text)
+  if ok and submit ~= false then
+    vim.defer_fn(function()
+      pcall(vim.api.nvim_chan_send, run.chan, "\r")
+    end, 40)
+  end
+  return ok
 end
 
 --- Stop an agent. Terminating rather than killing so it can save its session.
 function M.stop(run)
-	if run and run.job and run.status ~= "exited" then
-		-- So that its exit reads as yours rather than as news.
-		run.stopped = true
-		pcall(vim.fn.jobstop, run.job)
-		return true
-	end
-	return false
+  if run and run.job and run.status ~= "exited" then
+    -- So that its exit reads as yours rather than as news.
+    run.stopped = true
+    pcall(vim.fn.jobstop, run.job)
+    return true
+  end
+  return false
 end
 
 --- Kill a run and forget it, whatever state it is in, in one go. It is off
@@ -387,105 +387,105 @@ end
 --- Nothing is written down about it: the remembered conversation is the
 --- caller's to erase, and a run that has been dropped is never recorded again.
 function M.drop(run, done)
-	if not run or run.dropped then
-		return
-	end
-	run.dropped = true
-	runs[run.id] = nil
+  if not run or run.dropped then
+    return
+  end
+  run.dropped = true
+  runs[run.id] = nil
 
-	local finished = false
-	local function finish()
-		if finished then
-			return
-		end
-		finished = true
-		if run.buf and vim.api.nvim_buf_is_valid(run.buf) then
-			pcall(vim.api.nvim_buf_delete, run.buf, { force = true })
-		end
-		if done then
-			done()
-		end
-	end
+  local finished = false
+  local function finish()
+    if finished then
+      return
+    end
+    finished = true
+    if run.buf and vim.api.nvim_buf_is_valid(run.buf) then
+      pcall(vim.api.nvim_buf_delete, run.buf, { force = true })
+    end
+    if done then
+      done()
+    end
+  end
 
-	if run.status == "exited" or not run.job then
-		finish()
-	else
-		run.on_dropped = finish
-		pcall(vim.fn.jobstop, run.job)
-		-- jobstop escalates to SIGKILL on its own; this is for a process that
-		-- somehow outlives that, so the cleanup behind it is never left waiting.
-		vim.defer_fn(finish, 3000)
-	end
-	changed()
+  if run.status == "exited" or not run.job then
+    finish()
+  else
+    run.on_dropped = finish
+    pcall(vim.fn.jobstop, run.job)
+    -- jobstop escalates to SIGKILL on its own; this is for a process that
+    -- somehow outlives that, so the cleanup behind it is never left waiting.
+    vim.defer_fn(finish, 3000)
+  end
+  changed()
 end
 
 --- How long a run has been in its current state, as something short enough for
 --- a column.
 function M.elapsed(run)
-	local seconds = os.time() - (run.since or os.time())
-	if seconds < 60 then
-		return seconds .. "s"
-	elseif seconds < 3600 then
-		return math.floor(seconds / 60) .. "m"
-	end
-	return ("%dh%02dm"):format(math.floor(seconds / 3600), math.floor(seconds % 3600 / 60))
+  local seconds = os.time() - (run.since or os.time())
+  if seconds < 60 then
+    return seconds .. "s"
+  elseif seconds < 3600 then
+    return math.floor(seconds / 60) .. "m"
+  end
+  return ("%dh%02dm"):format(math.floor(seconds / 3600), math.floor(seconds % 3600 / 60))
 end
 
 --- What is wired and what is not, in the shape :Deps reports things. Worth
 --- having because a CLI whose hooks failed to install still runs, so without
 --- being told you would only notice by the dashboard staying quiet.
 local function report()
-	local lines = {}
-	for _, one in ipairs(cli.available()) do
-		local ok = false
-		for _, other in ipairs(wired) do
-			ok = ok or other.name == one.name
-		end
-		lines[#lines + 1] = ("  %-8s %s%s"):format(one.name, ok and "tracked" or "runs, but not tracked", one.note and ("  (" .. one.note .. ")") or "")
-	end
-	if #lines == 0 then
-		lines[1] = "  none of claude, codex or grok are installed"
-	end
-	for _, why in ipairs(problems) do
-		lines[#lines + 1] = "  " .. why
-	end
-	local live = 0
-	for _, run in pairs(runs) do
-		live = live + (run.status ~= "exited" and 1 or 0)
-	end
-	table.insert(lines, 1, ("agents: %d running"):format(live))
-	vim.notify(table.concat(lines, "\n"))
+  local lines = {}
+  for _, one in ipairs(cli.available()) do
+    local ok = false
+    for _, other in ipairs(wired) do
+      ok = ok or other.name == one.name
+    end
+    lines[#lines + 1] = ("  %-8s %s%s"):format(one.name, ok and "tracked" or "runs, but not tracked", one.note and ("  (" .. one.note .. ")") or "")
+  end
+  if #lines == 0 then
+    lines[1] = "  none of claude, codex or grok are installed"
+  end
+  for _, why in ipairs(problems) do
+    lines[#lines + 1] = "  " .. why
+  end
+  local live = 0
+  for _, run in pairs(runs) do
+    live = live + (run.status ~= "exited" and 1 or 0)
+  end
+  table.insert(lines, 1, ("agents: %d running"):format(live))
+  vim.notify(table.concat(lines, "\n"))
 end
 
 function M.setup()
-	wired, problems = cli.setup()
-	listen()
+  wired, problems = cli.setup()
+  listen()
 
-	vim.api.nvim_create_user_command("Agents", function(opts)
-		if opts.args == "check" then
-			report()
-		else
-			require("agent_dash").open()
-		end
-	end, {
-		nargs = "?",
-		complete = function()
-			return { "check" }
-		end,
-		desc = "The agent dashboard, or :Agents check for what is wired",
-	})
+  vim.api.nvim_create_user_command("Agents", function(opts)
+    if opts.args == "check" then
+      report()
+    else
+      require("agent_dash").open()
+    end
+  end, {
+    nargs = "?",
+    complete = function()
+      return { "check" }
+    end,
+    desc = "The agent dashboard, or :Agents check for what is wired",
+  })
 
-	-- An agent is a child of this process, so leaving without stopping them
-	-- would have Neovim wait on terminals it is about to discard anyway.
-	vim.api.nvim_create_autocmd("VimLeavePre", {
-		group = vim.api.nvim_create_augroup("agent_leave", { clear = true }),
-		callback = function()
-			for _, run in pairs(runs) do
-				pcall(vim.fn.jobstop, run.job)
-			end
-		end,
-	})
-	return wired, problems
+  -- An agent is a child of this process, so leaving without stopping them
+  -- would have Neovim wait on terminals it is about to discard anyway.
+  vim.api.nvim_create_autocmd("VimLeavePre", {
+    group = vim.api.nvim_create_augroup("agent_leave", { clear = true }),
+    callback = function()
+      for _, run in pairs(runs) do
+        pcall(vim.fn.jobstop, run.job)
+      end
+    end,
+  })
+  return wired, problems
 end
 
 return M

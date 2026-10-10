@@ -44,31 +44,31 @@ local ns = vim.api.nvim_create_namespace("agent_dash")
 -- Shape as well as colour, so the state survives a colourscheme where two of
 -- these land close together, and reads at a glance in a narrow sidebar.
 local MARK = {
-	starting = { "-", "AgentIdle" },
-	working = { "●", "AgentWorking" },
-	waiting = { "?", "AgentWaiting" },
-	idle = { "○", "AgentIdle" },
-	exited = { "x", "AgentExited" },
-	-- A worktree with nobody in it. Dimmer than any agent state, since the row
-	-- is there to be remembered rather than watched.
-	spare = { "·", "AgentExited" },
+  starting = { "-", "AgentIdle" },
+  working = { "●", "AgentWorking" },
+  waiting = { "?", "AgentWaiting" },
+  idle = { "○", "AgentIdle" },
+  exited = { "x", "AgentExited" },
+  -- A worktree with nobody in it. Dimmer than any agent state, since the row
+  -- is there to be remembered rather than watched.
+  spare = { "·", "AgentExited" },
 }
 
 local buf, unwatch
 
 local function set_hl()
-	local set = function(name, spec)
-		vim.api.nvim_set_hl(0, name, vim.tbl_extend("force", spec, { default = true }))
-	end
-	set("AgentWorking", { link = "DiagnosticInfo" })
-	set("AgentWaiting", { link = "DiagnosticWarn" })
-	set("AgentIdle", { link = "Comment" })
-	set("AgentExited", { link = "NonText" })
-	set("AgentRunName", { link = "Normal" })
-	set("AgentPlace", { link = "Directory" })
-	set("AgentMeta", { link = "Comment" })
-	set("AgentAdded", { link = "DiffAdd" })
-	set("AgentRemoved", { link = "DiffDelete" })
+  local set = function(name, spec)
+    vim.api.nvim_set_hl(0, name, vim.tbl_extend("force", spec, { default = true }))
+  end
+  set("AgentWorking", { link = "DiagnosticInfo" })
+  set("AgentWaiting", { link = "DiagnosticWarn" })
+  set("AgentIdle", { link = "Comment" })
+  set("AgentExited", { link = "NonText" })
+  set("AgentRunName", { link = "Normal" })
+  set("AgentPlace", { link = "Directory" })
+  set("AgentMeta", { link = "Comment" })
+  set("AgentAdded", { link = "DiffAdd" })
+  set("AgentRemoved", { link = "DiffDelete" })
 end
 
 --------------------------------------------------------------------------- --
@@ -88,18 +88,18 @@ local TREES_EVERY = 5
 --- Kept on the record it describes, whether that is a run or a worktree, so a
 --- row that is both does not ask twice.
 local function refresh_stat(rec, dir, base)
-	if not dir or not base or rec.stat_busy then
-		return
-	end
-	local now = os.time()
-	if rec.stat_at and now - rec.stat_at < STAT_EVERY then
-		return
-	end
-	rec.stat_at, rec.stat_busy = now, true
-	worktree.stat(dir, base, function(stat)
-		rec.stat_busy = false
-		rec.stat = stat
-	end)
+  if not dir or not base or rec.stat_busy then
+    return
+  end
+  local now = os.time()
+  if rec.stat_at and now - rec.stat_at < STAT_EVERY then
+    return
+  end
+  rec.stat_at, rec.stat_busy = now, true
+  worktree.stat(dir, base, function(stat)
+    rec.stat_busy = false
+    rec.stat = stat
+  end)
 end
 
 --- The repository the dashboard is about: the one you are working in. Cached
@@ -107,11 +107,11 @@ end
 --- the redraw path.
 local repos = {}
 local function repo()
-	local cwd = vim.fn.getcwd()
-	if repos[cwd] == nil then
-		repos[cwd] = worktree.repo(cwd) or false
-	end
-	return repos[cwd] or nil
+  local cwd = vim.fn.getcwd()
+  if repos[cwd] == nil then
+    repos[cwd] = worktree.repo(cwd) or false
+  end
+  return repos[cwd] or nil
 end
 
 --- This project's worktrees, refreshed on a timer and kept by path, so the
@@ -128,53 +128,53 @@ local erasing = {}
 local generation = 0
 
 local function refresh_trees(force)
-	-- A forced refresh goes ahead whatever is in flight. It is asked for when
-	-- something has just changed on disk, which is precisely when the listing
-	-- already running is the one that must not be believed.
-	if trees_busy and not force then
-		return
-	end
-	local now = os.time()
-	if not force and trees_at and now - trees_at < TREES_EVERY then
-		return
-	end
-	local root = repo()
-	if not root then
-		-- Nowhere to list. Anything in flight was about a repository we are no
-		-- longer in, so it is superseded by this rather than left to land.
-		generation = generation + 1
-		trees, trees_busy = {}, false
-		return
-	end
-	generation = generation + 1
-	local mine = generation
-	trees_at, trees_busy = now, true
-	worktree.trees(root, nil, function(found)
-		-- Superseded: something asked for a fresh listing after this one set
-		-- off, so this answer describes a state that has since been changed.
-		-- The listing that replaced it clears the flag.
-		if mine ~= generation then
-			return
-		end
-		trees_busy = false
-		local out = {}
-		for _, tree in ipairs(found) do
-			local rec = known[tree.dir] or tree
-			rec.branch, rec.head = tree.branch, tree.head
-			known[tree.dir] = rec
-			out[#out + 1] = rec
-			-- Worked out once and kept: where this branch left yours does not
-			-- move, and it is what the diff has to be measured against.
-			if not rec.base and not rec.base_busy then
-				rec.base_busy = true
-				worktree.forked(root, rec.dir, function(base)
-					rec.base_busy = false
-					rec.base = base
-				end)
-			end
-		end
-		trees = out
-	end)
+  -- A forced refresh goes ahead whatever is in flight. It is asked for when
+  -- something has just changed on disk, which is precisely when the listing
+  -- already running is the one that must not be believed.
+  if trees_busy and not force then
+    return
+  end
+  local now = os.time()
+  if not force and trees_at and now - trees_at < TREES_EVERY then
+    return
+  end
+  local root = repo()
+  if not root then
+    -- Nowhere to list. Anything in flight was about a repository we are no
+    -- longer in, so it is superseded by this rather than left to land.
+    generation = generation + 1
+    trees, trees_busy = {}, false
+    return
+  end
+  generation = generation + 1
+  local mine = generation
+  trees_at, trees_busy = now, true
+  worktree.trees(root, nil, function(found)
+    -- Superseded: something asked for a fresh listing after this one set
+    -- off, so this answer describes a state that has since been changed.
+    -- The listing that replaced it clears the flag.
+    if mine ~= generation then
+      return
+    end
+    trees_busy = false
+    local out = {}
+    for _, tree in ipairs(found) do
+      local rec = known[tree.dir] or tree
+      rec.branch, rec.head = tree.branch, tree.head
+      known[tree.dir] = rec
+      out[#out + 1] = rec
+      -- Worked out once and kept: where this branch left yours does not
+      -- move, and it is what the diff has to be measured against.
+      if not rec.base and not rec.base_busy then
+        rec.base_busy = true
+        worktree.forked(root, rec.dir, function(base)
+          rec.base_busy = false
+          rec.base = base
+        end)
+      end
+    end
+    trees = out
+  end)
 end
 
 --- Every row: the agents, newest first, then the worktrees nobody is in, then
@@ -186,86 +186,86 @@ end
 --- or neither. Shared with the sidebar, and the reason both index the same list
 --- from a line number.
 function M.items()
-	refresh_trees()
-	local out, taken = {}, {}
+  refresh_trees()
+  local out, taken = {}, {}
 
-	local tree_at = {}
-	for _, tree in ipairs(trees) do
-		tree_at[tree.dir] = tree
-	end
+  local tree_at = {}
+  for _, tree in ipairs(trees) do
+    tree_at[tree.dir] = tree
+  end
 
-	-- Agents by where they run, each place in the order of its newest agent.
-	-- One agent is one row, as it always was; two or more get a row for the
-	-- place and are listed under it.
-	local places, order = {}, {}
-	for _, run in ipairs(agent.runs()) do
-		local place = places[run.cwd]
-		if not place then
-			place = { dir = run.cwd, runs = {} }
-			places[run.cwd], order[#order + 1] = place, place
-		end
-		place.runs[#place.runs + 1] = run
-	end
-	for _, place in ipairs(order) do
-		if #place.runs == 1 then
-			out[#out + 1] = { run = place.runs[1] }
-		else
-			out[#out + 1] = { place = place, tree = tree_at[place.dir] }
-			for i, run in ipairs(place.runs) do
-				out[#out + 1] = { run = run, under = place, final = i == #place.runs }
-			end
-		end
-		-- Including an agent that has exited, which still speaks for its
-		-- worktree: "finished" says more than "resume".
-		taken[place.dir] = true
-	end
-	-- A place being erased: its agents are gone but git has not finished
-	-- removing it yet, and it must not come back as a row in the meantime.
-	for dir in pairs(erasing) do
-		taken[dir] = true
-	end
+  -- Agents by where they run, each place in the order of its newest agent.
+  -- One agent is one row, as it always was; two or more get a row for the
+  -- place and are listed under it.
+  local places, order = {}, {}
+  for _, run in ipairs(agent.runs()) do
+    local place = places[run.cwd]
+    if not place then
+      place = { dir = run.cwd, runs = {} }
+      places[run.cwd], order[#order + 1] = place, place
+    end
+    place.runs[#place.runs + 1] = run
+  end
+  for _, place in ipairs(order) do
+    if #place.runs == 1 then
+      out[#out + 1] = { run = place.runs[1] }
+    else
+      out[#out + 1] = { place = place, tree = tree_at[place.dir] }
+      for i, run in ipairs(place.runs) do
+        out[#out + 1] = { run = run, under = place, final = i == #place.runs }
+      end
+    end
+    -- Including an agent that has exited, which still speaks for its
+    -- worktree: "finished" says more than "resume".
+    taken[place.dir] = true
+  end
+  -- A place being erased: its agents are gone but git has not finished
+  -- removing it yet, and it must not come back as a row in the meantime.
+  for dir in pairs(erasing) do
+    taken[dir] = true
+  end
 
-	-- A worktree's record is matched by path rather than by project, since a
-	-- worktree lives under .data/ and not inside the repository it belongs to.
-	-- What is left over counts as this project's only if it was had here.
-	local root = repo()
-	local by_dir, here = {}, {}
-	for _, record in ipairs(require("agent_store").newest()) do
-		by_dir[record.cwd] = record
-		if root and (record.cwd == root or record.cwd:sub(1, #root + 1) == root .. "/") then
-			here[#here + 1] = record
-		end
-	end
+  -- A worktree's record is matched by path rather than by project, since a
+  -- worktree lives under .data/ and not inside the repository it belongs to.
+  -- What is left over counts as this project's only if it was had here.
+  local root = repo()
+  local by_dir, here = {}, {}
+  for _, record in ipairs(require("agent_store").newest()) do
+    by_dir[record.cwd] = record
+    if root and (record.cwd == root or record.cwd:sub(1, #root + 1) == root .. "/") then
+      here[#here + 1] = record
+    end
+  end
 
-	for _, tree in ipairs(trees) do
-		if not taken[tree.dir] then
-			out[#out + 1] = { tree = tree, last = by_dir[tree.dir] }
-			taken[tree.dir] = true
-		end
-	end
-	for _, record in ipairs(here) do
-		if not taken[record.cwd] then
-			out[#out + 1] = { session = record }
-			taken[record.cwd] = true
-		end
-	end
-	return out
+  for _, tree in ipairs(trees) do
+    if not taken[tree.dir] then
+      out[#out + 1] = { tree = tree, last = by_dir[tree.dir] }
+      taken[tree.dir] = true
+    end
+  end
+  for _, record in ipairs(here) do
+    if not taken[record.cwd] then
+      out[#out + 1] = { session = record }
+      taken[record.cwd] = true
+    end
+  end
+  return out
 end
 
 --- How long ago, in a column's worth of characters.
 local function ago(at)
-	if not at then
-		return ""
-	end
-	local seconds = os.time() - at
-	if seconds < 60 then
-		return seconds .. "s"
-	elseif seconds < 3600 then
-		return math.floor(seconds / 60) .. "m"
-	elseif seconds < 86400 then
-		return math.floor(seconds / 3600) .. "h"
-	end
-	return math.floor(seconds / 86400) .. "d"
+  if not at then
+    return ""
+  end
+  local seconds = os.time() - at
+  if seconds < 60 then
+    return seconds .. "s"
+  elseif seconds < 3600 then
+    return math.floor(seconds / 60) .. "m"
+  elseif seconds < 86400 then
+    return math.floor(seconds / 3600) .. "h"
+  end
+  return math.floor(seconds / 86400) .. "d"
 end
 
 --- One row as cells. Shared with the sidebar, which drops the wide ones.
@@ -273,118 +273,118 @@ end
 local URGENT = { "waiting", "working", "starting", "idle", "exited" }
 
 local function cells(item)
-	local run, tree = item.run, item.tree
+  local run, tree = item.run, item.tree
 
-	local place = item.place
-	if place then
-		local mark = MARK.idle
-		for _, state in ipairs(URGENT) do
-			if vim.iter(place.runs):any(function(r)
-				return r.status == state
-			end) then
-				mark = MARK[state]
-				break
-			end
-		end
-		if tree then
-			refresh_stat(tree, tree.dir, tree.base)
-		end
-		local stat = tree and tree.stat
-		return {
-			{ text = mark[1], hl = mark[2] },
-			{ text = vim.fn.fnamemodify(place.dir, ":t"), hl = "AgentPlace" },
-			{ text = "", hl = "AgentMeta" },
-			{ text = #place.runs .. " agents", hl = "AgentMeta" },
-			{ text = "", hl = "AgentMeta" },
-			{ text = stat and ("+%d-%d"):format(stat.added, stat.removed) or "", hl = "AgentAdded" },
-			{ text = tree and tree.branch or place.runs[1].where or "", hl = "AgentMeta" },
-		}
-	end
+  local place = item.place
+  if place then
+    local mark = MARK.idle
+    for _, state in ipairs(URGENT) do
+      if vim.iter(place.runs):any(function(r)
+        return r.status == state
+      end) then
+        mark = MARK[state]
+        break
+      end
+    end
+    if tree then
+      refresh_stat(tree, tree.dir, tree.base)
+    end
+    local stat = tree and tree.stat
+    return {
+      { text = mark[1], hl = mark[2] },
+      { text = vim.fn.fnamemodify(place.dir, ":t"), hl = "AgentPlace" },
+      { text = "", hl = "AgentMeta" },
+      { text = #place.runs .. " agents", hl = "AgentMeta" },
+      { text = "", hl = "AgentMeta" },
+      { text = stat and ("+%d-%d"):format(stat.added, stat.removed) or "", hl = "AgentAdded" },
+      { text = tree and tree.branch or place.runs[1].where or "", hl = "AgentMeta" },
+    }
+  end
 
-	if tree then
-		refresh_stat(tree, tree.dir, tree.base)
-		local mark = MARK.spare
-		local last = item.last
-		return {
-			{ text = mark[1], hl = mark[2] },
-			{ text = vim.fn.fnamemodify(tree.dir, ":t"), hl = "AgentMeta" },
-			{ text = last and last.cli or "", hl = "AgentMeta" },
-			{ text = last and "resume" or "no agent", hl = mark[2] },
-			{ text = last and ago(last.at) or "", hl = "AgentMeta" },
-			{ text = tree.stat and ("+%d-%d"):format(tree.stat.added, tree.stat.removed) or "", hl = "AgentAdded" },
-			{ text = tree.branch or "", hl = "AgentMeta" },
-		}
-	end
+  if tree then
+    refresh_stat(tree, tree.dir, tree.base)
+    local mark = MARK.spare
+    local last = item.last
+    return {
+      { text = mark[1], hl = mark[2] },
+      { text = vim.fn.fnamemodify(tree.dir, ":t"), hl = "AgentMeta" },
+      { text = last and last.cli or "", hl = "AgentMeta" },
+      { text = last and "resume" or "no agent", hl = mark[2] },
+      { text = last and ago(last.at) or "", hl = "AgentMeta" },
+      { text = tree.stat and ("+%d-%d"):format(tree.stat.added, tree.stat.removed) or "", hl = "AgentAdded" },
+      { text = tree.branch or "", hl = "AgentMeta" },
+    }
+  end
 
-	-- A conversation with nowhere of its own: had in the checkout you are
-	-- sitting in, or in a worktree that is no longer ours.
-	local session = item.session
-	if session then
-		local mark = MARK.spare
-		return {
-			{ text = mark[1], hl = mark[2] },
-			{ text = session.name or vim.fn.fnamemodify(session.cwd, ":t"), hl = "AgentMeta" },
-			{ text = session.cli, hl = "AgentMeta" },
-			{ text = "resume", hl = mark[2] },
-			{ text = ago(session.at), hl = "AgentMeta" },
-			{ text = "", hl = "AgentMeta" },
-			{ text = session.where or vim.fn.fnamemodify(session.cwd, ":t"), hl = "AgentMeta" },
-		}
-	end
+  -- A conversation with nowhere of its own: had in the checkout you are
+  -- sitting in, or in a worktree that is no longer ours.
+  local session = item.session
+  if session then
+    local mark = MARK.spare
+    return {
+      { text = mark[1], hl = mark[2] },
+      { text = session.name or vim.fn.fnamemodify(session.cwd, ":t"), hl = "AgentMeta" },
+      { text = session.cli, hl = "AgentMeta" },
+      { text = "resume", hl = mark[2] },
+      { text = ago(session.at), hl = "AgentMeta" },
+      { text = "", hl = "AgentMeta" },
+      { text = session.where or vim.fn.fnamemodify(session.cwd, ":t"), hl = "AgentMeta" },
+    }
+  end
 
-	-- Only for a run with a worktree of its own. Diffing the checkout you are
-	-- sitting in would report your uncommitted work as the agent's. And not
-	-- for one listed under its worktree, whose row already says it for all.
-	if run.where and not item.under then
-		refresh_stat(run, run.cwd, run.base)
-	end
-	local stat = not item.under and run.stat or nil
-	local mark = MARK[run.status] or MARK.idle
-	local diff = ""
-	if stat then
-		diff = ("+%d-%d"):format(stat.added, stat.removed)
-	end
+  -- Only for a run with a worktree of its own. Diffing the checkout you are
+  -- sitting in would report your uncommitted work as the agent's. And not
+  -- for one listed under its worktree, whose row already says it for all.
+  if run.where and not item.under then
+    refresh_stat(run, run.cwd, run.base)
+  end
+  local stat = not item.under and run.stat or nil
+  local mark = MARK[run.status] or MARK.idle
+  local diff = ""
+  if stat then
+    diff = ("+%d-%d"):format(stat.added, stat.removed)
+  end
 
-	return {
-		{ text = mark[1], hl = mark[2] },
-		{ text = item.under and ((item.final and "└ " or "├ ") .. run.name) or run.name, hl = "AgentRunName" },
-		{ text = run.cli, hl = "AgentMeta" },
-		{ text = tostring(run.doing or ""), hl = mark[2] },
-		{ text = agent.elapsed(run), hl = "AgentMeta" },
-		{ text = diff, hl = stat and "AgentAdded" or "AgentMeta" },
-		{ text = not item.under and (run.where or vim.fn.fnamemodify(run.cwd, ":t")) or "", hl = "AgentMeta" },
-	}
+  return {
+    { text = mark[1], hl = mark[2] },
+    { text = item.under and ((item.final and "└ " or "├ ") .. run.name) or run.name, hl = "AgentRunName" },
+    { text = run.cli, hl = "AgentMeta" },
+    { text = tostring(run.doing or ""), hl = mark[2] },
+    { text = agent.elapsed(run), hl = "AgentMeta" },
+    { text = diff, hl = stat and "AgentAdded" or "AgentMeta" },
+    { text = not item.under and (run.where or vim.fn.fnamemodify(run.cwd, ":t")) or "", hl = "AgentMeta" },
+  }
 end
 
 --- Lay cells out in aligned columns and return the lines plus, for each, the
 --- highlight spans in byte terms.
 local function layout(rows, keep)
-	local widths = {}
-	for _, row in ipairs(rows) do
-		for i, cell in ipairs(row) do
-			widths[i] = math.max(widths[i] or 0, vim.fn.strdisplaywidth(cell.text))
-		end
-	end
-	local lines, spans = {}, {}
-	for r, row in ipairs(rows) do
-		local parts, at, span = {}, 0, {}
-		for i, cell in ipairs(row) do
-			if keep[i] then
-				local text = cell.text
-				local pad = widths[i] - vim.fn.strdisplaywidth(text)
-				local piece = (i == 1 and "" or " ") .. text
-				at = at + (i == 1 and 0 or 1)
-				if cell.text ~= "" then
-					span[#span + 1] = { at, at + #text, cell.hl }
-				end
-				at = at + #text + pad
-				parts[#parts + 1] = piece .. string.rep(" ", pad)
-			end
-		end
-		lines[r] = table.concat(parts):gsub("%s+$", "")
-		spans[r] = span
-	end
-	return lines, spans
+  local widths = {}
+  for _, row in ipairs(rows) do
+    for i, cell in ipairs(row) do
+      widths[i] = math.max(widths[i] or 0, vim.fn.strdisplaywidth(cell.text))
+    end
+  end
+  local lines, spans = {}, {}
+  for r, row in ipairs(rows) do
+    local parts, at, span = {}, 0, {}
+    for i, cell in ipairs(row) do
+      if keep[i] then
+        local text = cell.text
+        local pad = widths[i] - vim.fn.strdisplaywidth(text)
+        local piece = (i == 1 and "" or " ") .. text
+        at = at + (i == 1 and 0 or 1)
+        if cell.text ~= "" then
+          span[#span + 1] = { at, at + #text, cell.hl }
+        end
+        at = at + #text + pad
+        parts[#parts + 1] = piece .. string.rep(" ", pad)
+      end
+    end
+    lines[r] = table.concat(parts):gsub("%s+$", "")
+    spans[r] = span
+  end
+  return lines, spans
 end
 
 --- The columns the dashboard shows, and the ones the sidebar has room for.
@@ -392,39 +392,39 @@ M.WIDE = { true, true, true, true, true, true, true }
 M.NARROW = { true, true, false, true, true, false, false }
 
 function M.render(into, keep, items)
-	if not into or not vim.api.nvim_buf_is_valid(into) then
-		return
-	end
-	items = items or M.items()
-	local lines, spans
+  if not into or not vim.api.nvim_buf_is_valid(into) then
+    return
+  end
+  items = items or M.items()
+  local lines, spans
 
-	if #items == 0 then
-		lines, spans = { "no agents running", "", "a to start one" }, {}
-	else
-		local rows = {}
-		for i, item in ipairs(items) do
-			rows[i] = cells(item)
-		end
-		lines, spans = layout(rows, keep)
-	end
+  if #items == 0 then
+    lines, spans = { "no agents running", "", "a to start one" }, {}
+  else
+    local rows = {}
+    for i, item in ipairs(items) do
+      rows[i] = cells(item)
+    end
+    lines, spans = layout(rows, keep)
+  end
 
-	local was = vim.bo[into].modifiable
-	vim.bo[into].modifiable = true
-	vim.api.nvim_buf_set_lines(into, 0, -1, false, lines)
-	vim.bo[into].modifiable = was
-	vim.api.nvim_buf_clear_namespace(into, ns, 0, -1)
+  local was = vim.bo[into].modifiable
+  vim.bo[into].modifiable = true
+  vim.api.nvim_buf_set_lines(into, 0, -1, false, lines)
+  vim.bo[into].modifiable = was
+  vim.api.nvim_buf_clear_namespace(into, ns, 0, -1)
 
-	for row, span in pairs(spans) do
-		for _, one in ipairs(span) do
-			pcall(vim.api.nvim_buf_set_extmark, into, ns, row - 1, one[1], {
-				end_col = one[2],
-				hl_group = one[3],
-			})
-		end
-	end
-	if #items == 0 then
-		pcall(vim.api.nvim_buf_set_extmark, into, ns, 0, 0, { end_line = 3, hl_group = "AgentMeta" })
-	end
+  for row, span in pairs(spans) do
+    for _, one in ipairs(span) do
+      pcall(vim.api.nvim_buf_set_extmark, into, ns, row - 1, one[1], {
+        end_col = one[2],
+        hl_group = one[3],
+      })
+    end
+  end
+  if #items == 0 then
+    pcall(vim.api.nvim_buf_set_extmark, into, ns, 0, 0, { end_line = 3, hl_group = "AgentMeta" })
+  end
 end
 
 --------------------------------------------------------------------------- --
@@ -433,37 +433,37 @@ end
 
 --- The row the cursor is on, or nil.
 local function current()
-	local line = vim.api.nvim_win_get_cursor(0)[1]
-	return M.items()[line]
+  local line = vim.api.nvim_win_get_cursor(0)[1]
+  return M.items()[line]
 end
 
 --- Show a run's terminal. Terminal buffers are kept alive hidden, so this is
 --- only ever a matter of putting an existing one in a window.
 function M.terminal(run, win)
-	if not run or not run.buf or not vim.api.nvim_buf_is_valid(run.buf) then
-		return
-	end
-	win_pick.focus(win)
-	vim.api.nvim_win_set_buf(win, run.buf)
-	-- Insert mode is what you want nine times in ten: the reason to open an
-	-- agent is to say something to it.
-	if run.status ~= "exited" then
-		vim.cmd("startinsert")
-	end
+  if not run or not run.buf or not vim.api.nvim_buf_is_valid(run.buf) then
+    return
+  end
+  win_pick.focus(win)
+  vim.api.nvim_win_set_buf(win, run.buf)
+  -- Insert mode is what you want nine times in ten: the reason to open an
+  -- agent is to say something to it.
+  if run.status ~= "exited" then
+    vim.cmd("startinsert")
+  end
 end
 
 --- Open a row in `win`: the agent's terminal, or the worktree itself, which
 --- lands you in the file browser at the top of what it has been doing.
 function M.show_in(item, win)
-	if not item then
-		return
-	end
-	if item.run then
-		return M.terminal(item.run, win)
-	end
-	win_pick.focus(win)
-	local dir = (item.tree and item.tree.dir) or (item.place and item.place.dir) or item.session.cwd
-	vim.cmd.edit(vim.fn.fnameescape(dir))
+  if not item then
+    return
+  end
+  if item.run then
+    return M.terminal(item.run, win)
+  end
+  win_pick.focus(win)
+  local dir = (item.tree and item.tree.dir) or (item.place and item.place.dir) or item.session.cwd
+  vim.cmd.edit(vim.fn.fnameescape(dir))
 end
 
 --- Erase a row, at once and without asking: kill whatever runs there, forget
@@ -474,247 +474,247 @@ end
 --- An agent listed under its worktree goes on its own, leaving the rest. Any
 --- other row is the whole place.
 local function erase(item)
-	if item.session then
-		require("agent_store").forget(item.session.id)
-		-- Nothing about a run changed, so nothing else will say so.
-		agent.changed()
-		return
-	end
-	if item.under then
-		require("agent_store").forget(item.run.id)
-		agent.drop(item.run)
-		return
-	end
+  if item.session then
+    require("agent_store").forget(item.session.id)
+    -- Nothing about a run changed, so nothing else will say so.
+    agent.changed()
+    return
+  end
+  if item.under then
+    require("agent_store").forget(item.run.id)
+    agent.drop(item.run)
+    return
+  end
 
-	local dir, victims
-	if item.run then
-		dir, victims = item.run.cwd, { item.run }
-	elseif item.place then
-		dir, victims = item.place.dir, vim.list_slice(item.place.runs)
-	else
-		dir, victims = item.tree.dir, {}
-	end
+  local dir, victims
+  if item.run then
+    dir, victims = item.run.cwd, { item.run }
+  elseif item.place then
+    dir, victims = item.place.dir, vim.list_slice(item.place.runs)
+  else
+    dir, victims = item.tree.dir, {}
+  end
 
-	local root = repo()
-	local ours = root and vim.tbl_contains(worktree.list(root), dir)
-	-- Asked now, while the directory is still there to ask.
-	local branch = ours and worktree.branch(dir) or nil
+  local root = repo()
+  local ours = root and vim.tbl_contains(worktree.list(root), dir)
+  -- Asked now, while the directory is still there to ask.
+  local branch = ours and worktree.branch(dir) or nil
 
-	-- Off the dashboard now rather than once git is done. Every row that could
-	-- stand for this place is held back until then, and the conversations go
-	-- first, since a resume into a directory that is gone is not a resume.
-	erasing[dir] = true
-	require("agent_store").forget_dir(dir)
-	if ours then
-		known[dir] = nil
-		for i, one in ipairs(trees) do
-			if one.dir == dir then
-				table.remove(trees, i)
-				break
-			end
-		end
-	end
+  -- Off the dashboard now rather than once git is done. Every row that could
+  -- stand for this place is held back until then, and the conversations go
+  -- first, since a resume into a directory that is gone is not a resume.
+  erasing[dir] = true
+  require("agent_store").forget_dir(dir)
+  if ours then
+    known[dir] = nil
+    for i, one in ipairs(trees) do
+      if one.dir == dir then
+        table.remove(trees, i)
+        break
+      end
+    end
+  end
 
-	-- The worktree goes once every agent in it has, so none is left running in
-	-- a directory that has been taken out from under it.
-	local pending = #victims + 1
-	local function gone()
-		pending = pending - 1
-		if pending > 0 then
-			return
-		end
-		if ours then
-			local ok, err = worktree.remove(root, dir, true, branch)
-			if not ok then
-				vim.notify("agent: " .. tostring(err), vim.log.levels.ERROR)
-			elseif err then
-				-- Removed, but the branch outlived it: worth saying, not worth failing.
-				vim.notify("agent: " .. tostring(err), vim.log.levels.WARN)
-			end
-		end
-		erasing[dir] = nil
-		refresh_trees(true)
-		agent.changed()
-	end
-	for _, run in ipairs(victims) do
-		agent.drop(run, gone)
-	end
-	gone()
+  -- The worktree goes once every agent in it has, so none is left running in
+  -- a directory that has been taken out from under it.
+  local pending = #victims + 1
+  local function gone()
+    pending = pending - 1
+    if pending > 0 then
+      return
+    end
+    if ours then
+      local ok, err = worktree.remove(root, dir, true, branch)
+      if not ok then
+        vim.notify("agent: " .. tostring(err), vim.log.levels.ERROR)
+      elseif err then
+        -- Removed, but the branch outlived it: worth saying, not worth failing.
+        vim.notify("agent: " .. tostring(err), vim.log.levels.WARN)
+      end
+    end
+    erasing[dir] = nil
+    refresh_trees(true)
+    agent.changed()
+  end
+  for _, run in ipairs(victims) do
+    agent.drop(run, gone)
+  end
+  gone()
 end
 
 local function keys(into)
-	local map = function(lhs, fn, desc)
-		vim.keymap.set("n", lhs, fn, { buffer = into, silent = true, nowait = true, desc = desc })
-	end
+  local map = function(lhs, fn, desc)
+    vim.keymap.set("n", lhs, fn, { buffer = into, silent = true, nowait = true, desc = desc })
+  end
 
-	-- Built at the keypress rather than once here, because it captures which
-	-- window you came from, and that is a different window every time. The
-	-- dashboard itself is excluded: it is a list, and an agent's terminal
-	-- opened into it is a list you no longer have. With nothing but a
-	-- directory listing beside it, that listing is what gets taken over,
-	-- exactly as opening a file from it would.
-	for _, lhs in ipairs({ "<CR>", "<S-CR>" }) do
-		map(lhs, function()
-			local item = current()
-			if not item then
-				return
-			end
-			local mine = vim.api.nvim_get_current_win()
-			win_pick.actions(function(win, chosen)
-				M.show_in(chosen, win)
-			end, mine)[lhs](item)
-		end, "Open this agent, or this worktree")
-	end
+  -- Built at the keypress rather than once here, because it captures which
+  -- window you came from, and that is a different window every time. The
+  -- dashboard itself is excluded: it is a list, and an agent's terminal
+  -- opened into it is a list you no longer have. With nothing but a
+  -- directory listing beside it, that listing is what gets taken over,
+  -- exactly as opening a file from it would.
+  for _, lhs in ipairs({ "<CR>", "<S-CR>" }) do
+    map(lhs, function()
+      local item = current()
+      if not item then
+        return
+      end
+      local mine = vim.api.nvim_get_current_win()
+      win_pick.actions(function(win, chosen)
+        M.show_in(chosen, win)
+      end, mine)[lhs](item)
+    end, "Open this agent, or this worktree")
+  end
 
-	map("i", function()
-		local item = current()
-		if not item or not item.run then
-			return
-		end
-		local run = item.run
-		vim.ui.input({ prompt = run.name .. " < " }, function(text)
-			if text and text ~= "" then
-				agent.send(run, text)
-			end
-		end)
-	end, "Say something to this agent")
+  map("i", function()
+    local item = current()
+    if not item or not item.run then
+      return
+    end
+    local run = item.run
+    vim.ui.input({ prompt = run.name .. " < " }, function(text)
+      if text and text ~= "" then
+        agent.send(run, text)
+      end
+    end)
+  end, "Say something to this agent")
 
-	map("d", function()
-		local item = current()
-		if not item then
-			return
-		end
-		require("agent_review").item(item)
-	end, "Read what changed here, as a diff you can answer")
+  map("d", function()
+    local item = current()
+    if not item then
+      return
+    end
+    require("agent_review").item(item)
+  end, "Read what changed here, as a diff you can answer")
 
-	map("a", function()
-		local item = current()
-		-- On a worktree, the obvious meaning of "start one" is "in this one",
-		-- and having to pick a place you are looking at would be silly.
-		local place = item
-			and item.tree
-			and {
-				dir = item.tree.dir,
-				branch = item.tree.branch,
-				name = vim.fn.fnamemodify(item.tree.dir, ":t"),
-				base = item.tree.base,
-			}
-		require("agent_spawn").show(false, place)
-	end, "Start an agent, in this worktree when the cursor is on one")
+  map("a", function()
+    local item = current()
+    -- On a worktree, the obvious meaning of "start one" is "in this one",
+    -- and having to pick a place you are looking at would be silly.
+    local place = item
+      and item.tree
+      and {
+        dir = item.tree.dir,
+        branch = item.tree.branch,
+        name = vim.fn.fnamemodify(item.tree.dir, ":t"),
+        base = item.tree.base,
+      }
+    require("agent_spawn").show(false, place)
+  end, "Start an agent, in this worktree when the cursor is on one")
 
-	map("n", function()
-		worktree.new(function(place)
-			if place then
-				refresh_trees(true)
-			end
-		end)
-	end, "Make a worktree, with nothing in it yet")
+  map("n", function()
+    worktree.new(function(place)
+      if place then
+        refresh_trees(true)
+      end
+    end)
+  end, "Make a worktree, with nothing in it yet")
 
-	map("r", function()
-		local item = current()
-		local record = item and (item.session or item.last)
-		if not record then
-			return
-		end
-		require("agent_spawn").resume(record)
-	end, "Pick this conversation back up where it was left")
+  map("r", function()
+    local item = current()
+    local record = item and (item.session or item.last)
+    if not record then
+      return
+    end
+    require("agent_spawn").resume(record)
+  end, "Pick this conversation back up where it was left")
 
-	map("s", function()
-		local item = current()
-		if item and item.run and agent.stop(item.run) then
-			vim.notify("agent: stopping " .. item.run.name)
-		end
-	end, "Stop this agent")
+  map("s", function()
+    local item = current()
+    if item and item.run and agent.stop(item.run) then
+      vim.notify("agent: stopping " .. item.run.name)
+    end
+  end, "Stop this agent")
 
-	map("x", function()
-		local item = current()
-		if item then
-			erase(item)
-		end
-	end, "Erase this: kill the agent, forget it, remove its worktree and branch")
+  map("x", function()
+    local item = current()
+    if item then
+      erase(item)
+    end
+  end, "Erase this: kill the agent, forget it, remove its worktree and branch")
 
-	map("q", function()
-		vim.cmd("close")
-	end, "Close the dashboard")
+  map("q", function()
+    vim.cmd("close")
+  end, "Close the dashboard")
 end
 
 local function ensure()
-	if buf and vim.api.nvim_buf_is_valid(buf) then
-		return buf
-	end
-	buf = vim.api.nvim_create_buf(false, true)
-	vim.api.nvim_buf_set_name(buf, NAME)
-	vim.bo[buf].buftype = "nofile"
-	vim.bo[buf].bufhidden = "hide"
-	vim.bo[buf].swapfile = false
-	vim.bo[buf].filetype = "agents"
-	vim.bo[buf].modifiable = false
-	keys(buf)
+  if buf and vim.api.nvim_buf_is_valid(buf) then
+    return buf
+  end
+  buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_name(buf, NAME)
+  vim.bo[buf].buftype = "nofile"
+  vim.bo[buf].bufhidden = "hide"
+  vim.bo[buf].swapfile = false
+  vim.bo[buf].filetype = "agents"
+  vim.bo[buf].modifiable = false
+  keys(buf)
 
-	if not unwatch then
-		unwatch = agent.watch(function()
-			-- Only when it is on screen: the dashboard ticks every second and
-			-- redrawing a buffer nobody is looking at is pure cost.
-			if buf and vim.api.nvim_buf_is_valid(buf) and vim.fn.bufwinid(buf) ~= -1 then
-				M.render(buf, M.WIDE)
-			end
-		end)
-	end
-	return buf
+  if not unwatch then
+    unwatch = agent.watch(function()
+      -- Only when it is on screen: the dashboard ticks every second and
+      -- redrawing a buffer nobody is looking at is pure cost.
+      if buf and vim.api.nvim_buf_is_valid(buf) and vim.fn.bufwinid(buf) ~= -1 then
+        M.render(buf, M.WIDE)
+      end
+    end)
+  end
+  return buf
 end
 
 --- Open the dashboard, focusing `run`'s row when given.
 function M.open(run)
-	set_hl()
-	local into = ensure()
-	local win = vim.fn.bufwinid(into)
-	if win == -1 then
-		vim.cmd("botright 12split")
-		win = vim.api.nvim_get_current_win()
-		vim.api.nvim_win_set_buf(win, into)
-		vim.wo[win].number = false
-		vim.wo[win].relativenumber = false
-		vim.wo[win].signcolumn = "no"
-		vim.wo[win].wrap = false
-		vim.wo[win].cursorline = true
-		-- In the winbar rather than the buffer, so what a row means and which
-		-- row you are on stay the same question: a legend on line one would put
-		-- every agent one line further down than the list says it is.
-		vim.wo[win].winbar =
-			"%#AgentMeta# <CR> open   d diff   i say   a start   n worktree   r resume   s stop   x erase   q close"
-	end
-	M.render(into, M.WIDE)
+  set_hl()
+  local into = ensure()
+  local win = vim.fn.bufwinid(into)
+  if win == -1 then
+    vim.cmd("botright 12split")
+    win = vim.api.nvim_get_current_win()
+    vim.api.nvim_win_set_buf(win, into)
+    vim.wo[win].number = false
+    vim.wo[win].relativenumber = false
+    vim.wo[win].signcolumn = "no"
+    vim.wo[win].wrap = false
+    vim.wo[win].cursorline = true
+    -- In the winbar rather than the buffer, so what a row means and which
+    -- row you are on stay the same question: a legend on line one would put
+    -- every agent one line further down than the list says it is.
+    vim.wo[win].winbar =
+      "%#AgentMeta# <CR> open   d diff   i say   a start   n worktree   r resume   s stop   x erase   q close"
+  end
+  M.render(into, M.WIDE)
 
-	if run then
-		for i, item in ipairs(M.items()) do
-			if item.run and item.run.id == run.id then
-				pcall(vim.api.nvim_win_set_cursor, win, { i, 0 })
-			end
-		end
-	end
-	return win
+  if run then
+    for i, item in ipairs(M.items()) do
+      if item.run and item.run.id == run.id then
+        pcall(vim.api.nvim_win_set_cursor, win, { i, 0 })
+      end
+    end
+  end
+  return win
 end
 
 --- Whether any view onto the agents is on screen. Used to decide whether
 --- starting one should open the dashboard: it should say something happened,
 --- but not push a split into a layout that is already showing the answer.
 function M.visible()
-	for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-		if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "agents" then
-			return true
-		end
-	end
-	return false
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "agents" then
+      return true
+    end
+  end
+  return false
 end
 
 function M.toggle()
-	local into = buf and vim.api.nvim_buf_is_valid(buf) and buf or nil
-	local win = into and vim.fn.bufwinid(into) or -1
-	if win ~= -1 then
-		vim.api.nvim_win_close(win, false)
-		return
-	end
-	M.open()
+  local into = buf and vim.api.nvim_buf_is_valid(buf) and buf or nil
+  local win = into and vim.fn.bufwinid(into) or -1
+  if win ~= -1 then
+    vim.api.nvim_win_close(win, false)
+    return
+  end
+  M.open()
 end
 
 vim.keymap.set("n", "<leader>ad", M.toggle, { silent = true, desc = "Agent dashboard: every agent and what it is doing" })
