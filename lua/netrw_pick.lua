@@ -243,6 +243,21 @@ function M.choose(islocal)
   end
 end
 
+function M.delete(islocal)
+  if islocal == 0 then
+    vim.fn["netrw#Call"]("NetrwRemoteRm", "", vim.fn["netrw#Expose"]("path"))
+    return
+  end
+  local dir = vim.b.netrw_curdir
+  if vim.w.netrw_liststyle == 3 then
+    dir = vim.fn["netrw#Call"]("NetrwTreePath", vim.w.netrw_treetop)
+    if (word_under_cursor() or ""):sub(-1) == "/" then
+      dir = vim.fn.fnamemodify((dir:gsub("/$", "")), ":h")
+    end
+  end
+  vim.fn["netrw#Call"]("NetrwLocalRm", dir)
+end
+
 function M.setup()
   win_pick.setup()
 
@@ -269,12 +284,17 @@ function M.setup()
       call luaeval('require("netrw_pick").create(_A)', a:islocal)
       return ""
     endfunction
+    function! NetrwPickDelete(islocal) abort
+      call luaeval('require("netrw_pick").delete(_A)', a:islocal)
+      return ""
+    endfunction
   ]])
 
   vim.g.Netrw_UserMaps = {
     { "<cr>", "NetrwPickChoose" },
     { "<s-cr>", "NetrwPickDefault" },
     { "%", "NetrwPickNew" },
+    { "D", "NetrwPickDelete" },
   }
 
   -- netrw installs the maps above itself, so keys.lua never sees them go by
@@ -282,6 +302,7 @@ function M.setup()
     { lhs = "<cr>", where = "netrw", desc = "Outline a target window, hjkl to move, <CR> to open there" },
     { lhs = "<s-cr>", where = "netrw", desc = "Open the file in the previous window (netrw's default)" },
     { lhs = "%", where = "netrw", desc = "Create a file on disk, then choose where to open it" },
+    { lhs = "D", where = "netrw", desc = "Delete the file or directory under the cursor, in tree view too" },
   })
 
   -- <c-w>s and <c-w>v are not in that list, and are registered with
