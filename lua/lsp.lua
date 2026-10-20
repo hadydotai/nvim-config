@@ -1,8 +1,8 @@
 -- Language server setup, and the keys that drive it.
 --
 -- Neovim maps most of the LSP verbs itself (grn, gra, grr, gri, grt, gO, K),
--- so the only one added here is gd. The rest are declared at the bottom, not
--- mapped, purely so <leader>h can list them.
+-- so the only ones added here are gd, grh and grc. The rest are declared at
+-- the bottom, not mapped, purely so <leader>h can list them.
 
 local M = {}
 
@@ -52,6 +52,45 @@ vim.o.completeopt = "menu,menuone,popup,noinsert"
 vim.keymap.set("n", "gd", function()
   vim.lsp.buf.definition()
 end, { silent = true, desc = "Go to definition" })
+
+vim.keymap.set("n", "grh", function()
+  if vim.b.references_shown then
+    vim.lsp.buf.clear_references()
+    vim.b.references_shown = false
+  else
+    vim.lsp.buf.document_highlight()
+    vim.b.references_shown = true
+  end
+end, { silent = true, desc = "Highlight the symbol under the cursor across the file; grh again clears" })
+
+vim.keymap.set("n", "grc", function()
+  local client = vim.lsp.get_clients({ bufnr = 0, method = "textDocument/documentHighlight" })[1]
+  if client == nil then
+    vim.notify("No language server here can find the symbol's occurrences", vim.log.levels.WARN)
+    return
+  end
+  local params = vim.lsp.util.make_position_params(0, client.offset_encoding)
+  local response = client:request_sync("textDocument/documentHighlight", params, 2000, 0)
+  if response == nil or response.result == nil or #response.result == 0 then
+    return
+  end
+
+  if vim.b.references_shown then
+    vim.lsp.buf.clear_references()
+    vim.b.references_shown = false
+  end
+
+  local spans = {}
+  for _, highlight in ipairs(response.result) do
+    local range = highlight.range
+    local row = range.start.line + 1
+    local line = vim.api.nvim_buf_get_lines(0, row - 1, row, true)[1]
+    local first = vim.str_byteindex(line, client.offset_encoding, range.start.character, false) + 1
+    local last = vim.str_byteindex(line, client.offset_encoding, range["end"].character, false)
+    spans[#spans + 1] = { row, first, last }
+  end
+  require("cursors").select_each(spans)
+end, { silent = true, desc = "A cursor on every occurrence of the symbol in the file, each one selected" })
 
 -- Neovim's own LSP mappings, listed so <leader>h describes the whole set rather
 -- than only the part this configuration adds. They are set in

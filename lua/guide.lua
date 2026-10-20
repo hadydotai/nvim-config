@@ -178,6 +178,14 @@ already know.
 `K` takes two presses. The first shows the documentation; the second moves the
 cursor into that float, where the usual motions scroll it and `q` closes it.
 
+`grh` lights up every place the symbol under the cursor is used in this file,
+as the server sees it, so the same word in a string or a comment stays dark.
+`grc` puts a cursor on each of those places with the symbol selected, so `c`
+and what you type changes them all at once, and any other command runs at
+every cursor too. `grw` does the same for every whole-word match of the word,
+strings and comments included. `<Esc>` back in normal mode goes back to one
+cursor, and one `u` undoes the edit everywhere.
+
 `:lsp` drives the servers themselves. `:lsp restart` after changing a project's
 configuration, and `:lsp stop`, `:lsp enable`, `:lsp disable` for the rest. It
 is `:lsp`, not `:LspRestart`, which belonged to a plugin this does not have.
@@ -188,6 +196,12 @@ is `:lsp`, not `:LspRestart`, which belonged to a plugin this does not have.
       { "grn", "Rename this symbol" },
       { "gra", "Code actions" },
       { "grr", "References, in the quickfix list" },
+      { "grh", "Highlight this symbol across the file; grh again clears" },
+      { "grc", "A cursor on every use of this symbol in the file, each selected" },
+      { "grw", "A cursor on every whole-word match in the file, strings and comments too" },
+      { "<Esc>", "Back to one cursor", scope = "while there are cursors" },
+      { "<Left>", "Moves without starting a new undo step (multicursor.nvim)", mode = "insert" },
+      { "<Right>", "Moves without starting a new undo step (multicursor.nvim)", mode = "insert" },
       { "gri", "Go to implementation" },
       { "grt", "Go to type definition" },
       { "grx", "Run the code lens under the cursor" },

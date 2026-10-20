@@ -1,9 +1,9 @@
 # nvim
 
 A small Neovim configuration with no plugin manager and, apart from
-nvim-treesitter, no plugins. Everything it installs or generates stays inside
-this directory, so the whole editor is one repository you can move between
-machines.
+nvim-treesitter and multicursor.nvim, no plugins. Everything it installs or
+generates stays inside this directory, so the whole editor is one repository
+you can move between machines.
 
 `<leader>h` lists every mapping this configuration sets, filterable, with the
 file and line each one came from. That is the authoritative list; this file
@@ -75,6 +75,7 @@ taking a mapping away and by adding one nobody wrote up.
 | `lua/agent_context.lua` | the file, line or selection an agent is asked about |
 | `lua/agent_board.lua` | on an Orven board: its agents on the dashboard, started as columns |
 | `lua/debug_board.lua` | on an Orven board: `<leader>x`, its Debugger column's keys |
+| `lua/cursors.lua`    | multicursor.nvim, and the cursors `grc`/`grw` put on a word |
 | `lsp/*.lua`          | one file per language server                        |
 | `.data/ .state/ .cache/` | generated, gitignored: plugins, parsers, undo, logs |
 
@@ -835,9 +836,12 @@ alone. The full set is in `<leader>h`; the ones to learn first:
 
 | key         | what it does                                              |
 | ----------- | --------------------------------------------------------- |
-| `gd`        | go to definition (the only one added here)                |
+| `gd`        | go to definition (added here)                             |
 | `K`         | documentation for the symbol under the cursor; `K` again focuses the float so you can scroll it, `q` closes |
 | `grr`       | references, in the quickfix list                          |
+| `grh`       | highlight the symbol under the cursor across the file (added here); `grh` again clears |
+| `grc`       | a cursor on every occurrence of the symbol in the file, each selected (added here); `<Esc>` goes back to one |
+| `grw`       | the same for every whole-word match of the word, strings and comments included (added here) |
 | `grn`       | rename                                                    |
 | `gra`       | code actions                                              |
 | `gri`/`grt` | go to implementation / type definition                    |
@@ -848,7 +852,7 @@ alone. The full set is in `<leader>h`; the ones to learn first:
 | `<leader>q` / `<leader>Q` | diagnostics in the quickfix list, this buffer / all of them |
 | `<C-w>d`    | the diagnostics on this line in full, in a float          |
 
-`gd` is the one addition, and only because plain `gd` is an older Vim key that
+`gd` is added only because plain `gd` is an older Vim key that
 means something else: "go to local declaration", a backwards keyword search
 inside the current function. In Python that lands on whatever happened to match
 textually rather than on the definition, which reads as the language server

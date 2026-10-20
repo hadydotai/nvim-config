@@ -1,5 +1,10 @@
 {
   "plugins": {
+    "multicursor.nvim": {
+      "rev": "c574bfc1f7e63dfea3e64b8453c9f7c660127238",
+      "src": "https://github.com/jake-stewart/multicursor.nvim",
+      "version": "'1.0'"
+    },
     "nvim-treesitter": {
       "rev": "3d3321b560a63ff92a8692401f303a5123336b86",
       "src": "https://github.com/nvim-treesitter/nvim-treesitter",
