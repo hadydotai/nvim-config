@@ -219,6 +219,21 @@ local function tsgo_cmd()
   return ("mkdir -p %s/node && npm install --silent --prefix %s/node @typescript/native-preview"):format(DATA, DATA)
 end
 
+--- A single binary, so no npm, and on Linux the musl build for the reason
+--- ripgrep's is: it is static. The tag is picked out of the release list
+--- rather than taken from /releases/latest, because the same repository
+--- publishes Biome's JavaScript API, and "latest" is sometimes that.
+local function biome_cmd()
+  local asset = (M.platform() == "mac" and "darwin-%s" or "linux-%s-musl"):format(cpu())
+  return table.concat({
+    'tag=$(curl -fsSL https://api.github.com/repos/biomejs/biome/releases'
+      .. ' | sed -n \'s/.*"tag_name": *"\\(@biomejs\\/biome@[0-9.]*\\)".*/\\1/p\' | head -1)',
+    ("mkdir -p %s"):format(BIN),
+    ('curl -fsSL "https://github.com/biomejs/biome/releases/download/$tag/biome-%s" -o %s/biome'):format(asset, BIN),
+    ("chmod +x %s/biome"):format(BIN),
+  }, " && ")
+end
+
 --- GOBIN rather than a plain `go install`, which would put it in $GOPATH/bin.
 --- That directory is not on $PATH on a machine that has not been set up for Go
 --- development, and a language server nvim cannot see is the same as one that
@@ -358,6 +373,8 @@ local DEPS = {
     after = "python3",
   },
   { bin = "tsgo", why = "typescript language server", get = tsgo_cmd, after = "npm" },
+  -- a fallback: lsp/biome.lua runs the project's own biome when it has one
+  { bin = "biome", why = "formats javascript and typescript in projects that use biome", get = biome_cmd },
   { bin = "gopls", why = "go language server", get = gopls_cmd, after = "go", probe = "version" },
   { bin = "rust-analyzer", why = "rust language server", get = rust_analyzer_cmd },
   -- `odin version` and `ols version`, as subcommands and with no dashes, for

@@ -87,8 +87,8 @@ taking a mapping away and by adding one nobody wrote up.
 
 `:Deps` shows what is present, `:Deps install` fetches what is missing. System
 packages (compiler, git, curl, node, python) come from the OS package manager
-and differ per platform; the language servers, ripgrep and the tree-sitter CLI
-are fetched straight from upstream into `.data/` with no sudo.
+and differ per platform; the language servers, Biome, ripgrep and the
+tree-sitter CLI are fetched straight from upstream into `.data/` with no sudo.
 
 The platform is the family rather than the distribution, taken from `ID` and
 then `ID_LIKE` in `/etc/os-release`, which is what makes derivatives work
@@ -1096,6 +1096,28 @@ Two settings, both about staying out of the way:
 - `check.command` is `clippy` rather than `check`. It reports a superset, and
   clippy is one of the components the dependency recipe installs, so it is not
   reaching for something that might not be there.
+
+### TypeScript and JavaScript: Biome where the project has it
+
+tsgo is the language server; a write formats only in projects that use Biome.
+Biome attaches when there is a `biome.json` or `biome.jsonc` between the file
+and the project root (the lockfile, else `.git`), and then formats every write
+with the project's settings, synchronously and through the server, the way
+gopls does. Without one nothing attaches and a write leaves the file alone:
+Biome formats without a configuration too, but in a project kept by Prettier or
+by hand every write would turn into a diff in Biome's style. tsgo's own
+formatter is still there for `gq`.
+
+It is rooted at the outermost configuration, so in a workspace the packages'
+nested `biome.json` files are seen from the top one, and it runs the project's
+own `node_modules/.bin/biome` when there is one, looked for upward the way node
+resolves it. That is the version `package.json` pins, and another can format
+the same file differently. The one `:Deps install` puts in `.data/` is the
+fallback for a checkout that has not been installed yet.
+
+Formatting only: Biome can also organize imports and apply its safe fixes, and
+a write does neither. Its lint warnings come with it, as diagnostics. It stays out of `lspstatus`'s list of expected servers, so a
+TypeScript file in a project without Biome is not marked `biome!`.
 
 ## Multiple cursors
 

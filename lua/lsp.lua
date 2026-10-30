@@ -18,6 +18,13 @@ M.start_dir = vim.fs.normalize(vim.fn.getcwd())
 
 vim.lsp.enable(M.servers)
 
+-- Started only in the projects that use it, which lsp/biome.lua decides, and
+-- kept out of M.servers for that reason: lspstatus.lua takes that list as the
+-- servers every buffer of their filetype should have, and would mark biome
+-- missing in each TypeScript file of a project that never asked for it. Once
+-- attached it is listed like any other.
+vim.lsp.enable("biome")
+
 vim.api.nvim_create_autocmd("LspAttach", {
   callback = function(ev)
     local client = vim.lsp.get_client_by_id(ev.data.client_id)
