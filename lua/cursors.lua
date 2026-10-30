@@ -9,8 +9,17 @@ local mc = require("multicursor-nvim")
 mc.setup()
 
 mc.addKeymapLayer(function(layer_set)
-  layer_set("n", "<Esc>", mc.clearCursors, { desc = "Back to one cursor" })
+  layer_set("n", "<Esc>", function()
+    if mc.cursorsEnabled() then
+      mc.clearCursors()
+    else
+      mc.enableCursors()
+    end
+  end, { desc = "Cursors dropped with gl start following; once they do, back to one cursor" })
 end)
+
+vim.keymap.set("n", "gl", mc.toggleCursor, { desc = "Drop a cursor here, or lift the one that is; <Esc> when done dropping" })
+vim.keymap.set("x", "gl", mc.addCursorOperator, { desc = "A cursor on each line of the selection, at the block's left edge" })
 
 local M = {}
 

@@ -27,7 +27,7 @@ works there because it works everywhere, and reading it is practice. It appears
 only when nvim was given nothing else to do, and it is wiped the instant its
 window shows anything, so it never needs dismissing.
 
-`<leader>H` opens the guide in a tab of its own: fifteen sections, in the order
+`<leader>H` opens the guide in a tab of its own: seventeen sections, in the order
 you would want to learn them, drawn by the same markdown renderer `<leader>p`
 uses. `<CR>` on a line of the contents jumps to that section, `]]` and `[[`
 move between them, `q` closes it.
@@ -75,7 +75,7 @@ taking a mapping away and by adding one nobody wrote up.
 | `lua/agent_context.lua` | the file, line or selection an agent is asked about |
 | `lua/agent_board.lua` | on an Orven board: its agents on the dashboard, started as columns |
 | `lua/debug_board.lua` | on an Orven board: `<leader>x`, its Debugger column's keys |
-| `lua/cursors.lua`    | multicursor.nvim, and the cursors `grc`/`grw` put on a word |
+| `lua/cursors.lua`    | multicursor.nvim: `gl`, and the cursors `grc`/`grw` put on a word |
 | `lsp/*.lua`          | one file per language server                        |
 | `.data/ .state/ .cache/` | generated, gitignored: plugins, parsers, undo, logs |
 
@@ -1096,6 +1096,21 @@ Two settings, both about staying out of the way:
 - `check.command` is `clippy` rather than `check`. It reports a superset, and
   clippy is one of the components the dependency recipe installs, so it is not
   reaching for something that might not be there.
+
+## Multiple cursors
+
+From multicursor.nvim, in `lua/cursors.lua`. Once there is more than one
+cursor, every command runs at each of them.
+
+| key         | what it does                                              |
+| ----------- | --------------------------------------------------------- |
+| `grc` / `grw` | a cursor on every use of the symbol / every whole-word match (see LSP above) |
+| `gl` in visual mode | a cursor on each line of the selection: `<C-v>`, `j`/`k`, `gl` puts them at the block's left edge |
+| `gl`        | drop a cursor here, or lift the one that is; they wait while you move to the next spot |
+| `<Esc>`     | dropped cursors start following; with cursors live, back to one |
+
+One `u` undoes an edit at every cursor. The plugin also maps `<Left>` and
+`<Right>` in insert mode so they move without starting a new undo step.
 
 ## Treesitter and folding
 

@@ -199,15 +199,40 @@ is `:lsp`, not `:LspRestart`, which belonged to a plugin this does not have.
       { "grh", "Highlight this symbol across the file; grh again clears" },
       { "grc", "A cursor on every use of this symbol in the file, each selected" },
       { "grw", "A cursor on every whole-word match in the file, strings and comments too" },
-      { "<Esc>", "Back to one cursor", scope = "while there are cursors" },
-      { "<Left>", "Moves without starting a new undo step (multicursor.nvim)", mode = "insert" },
-      { "<Right>", "Moves without starting a new undo step (multicursor.nvim)", mode = "insert" },
       { "gri", "Go to implementation" },
       { "grt", "Go to type definition" },
       { "grx", "Run the code lens under the cursor" },
       { "<C-]>", "Go to definition through 'tagfunc'" },
       { "<C-s>", "Signature help", mode = "insert" },
       { "<leader>l", "The LSP log, for when a server behaves as though absent" },
+    },
+  },
+
+  {
+    id = "cursors",
+    title = "Multiple cursors",
+    body = [==[
+`grc` and `grw` above put a cursor on every use of a word. For cursors
+anywhere else:
+
+`<C-v>`, `j`/`k` down or up to cover the lines, then `gl`, and there is a
+cursor on each of those lines at the block's left edge. From `v` or `V` they
+go at the start of each line.
+
+`gl` in normal mode drops a cursor where you are and leaves it there while you
+move on, so you can walk to the next spot and drop another; `gl` on one you
+dropped lifts it. Those cursors wait until `<Esc>`, and from then on every
+command runs at all of them.
+
+With cursors live, `<Esc>` in normal mode goes back to one, and one `u` undoes
+an edit everywhere.
+]==],
+    keys = {
+      { "gl", "A cursor on each line of the selection", mode = "visual" },
+      { "gl", "Drop a cursor here, or lift the one that is" },
+      { "<Esc>", "Dropped cursors start following; again, back to one", scope = "while there are cursors" },
+      { "<Left>", "Moves without starting a new undo step (multicursor.nvim)", mode = "insert" },
+      { "<Right>", "Moves without starting a new undo step (multicursor.nvim)", mode = "insert" },
     },
   },
 
